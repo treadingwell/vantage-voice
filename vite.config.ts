@@ -1,0 +1,92 @@
+import { defineConfig } from 'vite';
+import { VitePWA } from 'vite-plugin-pwa';
+
+export default defineConfig({
+  plugins: [
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: [
+        'meta/favicon.png',
+        'meta/apple-touch-icon.png',
+        'ui/vantage.webp',
+        'data/stories.json',
+        'figs/*.webp'
+      ],
+      manifest: {
+        name: 'Vantage Voice & Storybook Companion',
+        short_name: 'Vantage',
+        description: '100% Offline Voice & Storybook Companion App for Vantage by Stonemaier Games',
+        theme_color: '#182432',
+        background_color: '#0f1722',
+        display: 'standalone',
+        orientation: 'portrait',
+        start_url: '/',
+        icons: [
+          {
+            src: '/meta/favicon.png',
+            sizes: '192x192',
+            type: 'image/png'
+          },
+          {
+            src: '/meta/apple-touch-icon.png',
+            sizes: '180x180',
+            type: 'image/png',
+            purpose: 'any maskable'
+          }
+        ]
+      },
+      workbox: {
+        maximumFileSizeToCacheInBytes: 60 * 1024 * 1024, // 60 MB to accommodate stories.json and offline voice models
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,json,wasm,tar,gz}'],
+        runtimeCaching: [
+          {
+            urlPattern: /\/data\/stories\.json$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'vantage-stories-cache',
+              expiration: {
+                maxEntries: 5,
+                maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
+              },
+              cacheableResponse: {
+                statuses: [0, 200]
+              }
+            }
+          },
+          {
+            urlPattern: /\/figs\/.*\.webp$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'vantage-figs-cache',
+              expiration: {
+                maxEntries: 200,
+                maxAgeSeconds: 60 * 60 * 24 * 365
+              },
+              cacheableResponse: {
+                statuses: [0, 200]
+              }
+            }
+          },
+          {
+            urlPattern: /\/models\/.*$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'vantage-voice-models-cache',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 365
+              },
+              cacheableResponse: {
+                statuses: [0, 200]
+              }
+            }
+          }
+        ]
+      }
+    })
+  ],
+  test: {
+    environment: 'jsdom',
+    globals: true
+  }
+});

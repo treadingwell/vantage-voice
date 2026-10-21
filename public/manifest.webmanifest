@@ -1,0 +1,23 @@
+{
+  "name": "Vantage Voice & Storybook Companion",
+  "short_name": "Vantage",
+  "description": "100% Offline Voice & Storybook Companion App for Vantage by Stonemaier Games",
+  "theme_color": "#182432",
+  "background_color": "#0f1722",
+  "display": "standalone",
+  "orientation": "portrait",
+  "start_url": "/",
+  "icons": [
+    {
+      "src": "/meta/favicon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/meta/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

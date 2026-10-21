@@ -1,0 +1,28 @@
+{
+  "name": "vantage-companion",
+  "private": true,
+  "version": "1.0.0",
+  "description": "100% Offline Voice & Storybook Companion App for Vantage by Stonemaier Games",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@capacitor/core": "^6.0.0",
+    "vosk-browser": "^0.0.8"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.0.0",
+    "@types/node": "^22.0.0",
+    "jsdom": "^25.0.0",
+    "typescript": "^5.6.0",
+    "vite": "^5.4.0",
+    "vite-plugin-pwa": "^0.20.5",
+    "vitest": "^2.1.0"
+  }
+}
