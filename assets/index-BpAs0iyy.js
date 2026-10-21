@@ -875,10 +875,10 @@ var LU=Object.defineProperty;var oU=(N,U,F)=>U in N?LU(N,U,{enumerable:!0,config
     <header class="app-header">
       <div class="header-container">
         <a href="#" class="header-logo-group" id="header-logo-home">
-          <img src="./ui/vantage.webp" alt="Vantage" class="header-logo-img" />
+          <img src="./meta/icon-192.png" alt="Vantage Voice" class="header-logo-img" />
           <div class="header-title-text">
-            <span class="header-title">Vantage</span>
-            <span class="header-subtitle">Voice & Storybook Companion</span>
+            <span class="header-title">Vantage Voice</span>
+            <span class="header-subtitle">Offline Storybook Companion</span>
           </div>
         </a>
         <div class="header-actions">
@@ -913,7 +913,7 @@ var LU=Object.defineProperty;var oU=(N,U,F)=>U in N?LU(N,U,{enumerable:!0,config
 
     <!-- Settings Modal Container -->
     <div id="settings-modal-root" class="settings-modal-root"></div>
-  `;try{const U=await VU.loadFromUrl("./data/stories.json");nU.setVocabulary(U.getAllVocabularyWords());const F=new RF(U,nU),Q=async()=>{await F.unlockAudio(),window.removeEventListener("pointerdown",Q),window.removeEventListener("keydown",Q),window.removeEventListener("touchstart",Q)};window.addEventListener("pointerdown",Q,{once:!0}),window.addEventListener("keydown",Q,{once:!0}),window.addEventListener("touchstart",Q,{once:!0});const R=document.getElementById("story-view-root"),l=document.getElementById("lookup-pad-root"),J=document.getElementById("voice-dock-root"),n=document.getElementById("settings-modal-root"),D=document.getElementById("loading-state");D&&(D.style.display="none"),l&&(l.style.display="block");const k=new JF(R,F),p=new VF(l,F),a=new dF(n,F),E=new lF(J,F,()=>{a.open()}),C=document.getElementById("header-logo-home");C==null||C.addEventListener("click",c=>{c.preventDefault(),F.backToLookup()});const M=document.getElementById("btn-header-settings");M==null||M.addEventListener("click",()=>{a.open()});const G=document.getElementById("btn-header-mute");G==null||G.addEventListener("click",()=>{F.toggleMuted()}),F.onStateChange(c=>{c.activeResult?(R.style.display="block",l.style.display="none"):(R.style.display="none",l.style.display="block"),G&&(c.isMuted?G.style.color="var(--accent-coral)":G.style.color="")}),console.log("Vantage Voice & Storybook Companion App initialized successfully!")}catch(U){console.error("Failed to initialize Vantage Companion App:",U);const F=document.getElementById("loading-state");F&&(F.innerHTML=`
+  `;try{const U=await VU.loadFromUrl("./data/stories.json");nU.setVocabulary(U.getAllVocabularyWords());const F=new RF(U,nU),Q=async()=>{await F.unlockAudio(),window.removeEventListener("pointerdown",Q),window.removeEventListener("keydown",Q),window.removeEventListener("touchstart",Q)};window.addEventListener("pointerdown",Q,{once:!0}),window.addEventListener("keydown",Q,{once:!0}),window.addEventListener("touchstart",Q,{once:!0});const R=document.getElementById("story-view-root"),l=document.getElementById("lookup-pad-root"),J=document.getElementById("voice-dock-root"),n=document.getElementById("settings-modal-root"),D=document.getElementById("loading-state");D&&(D.style.display="none"),l&&(l.style.display="block");const k=new JF(R,F),p=new VF(l,F),a=new dF(n,F),E=new lF(J,F,()=>{a.open()}),C=document.getElementById("header-logo-home");C==null||C.addEventListener("click",c=>{c.preventDefault(),F.backToLookup()});const M=document.getElementById("btn-header-settings");M==null||M.addEventListener("click",()=>{a.open()});const G=document.getElementById("btn-header-mute");G==null||G.addEventListener("click",()=>{F.toggleMuted()}),F.onStateChange(c=>{c.activeResult?(R.style.display="block",l.style.display="none"):(R.style.display="none",l.style.display="block"),G&&(c.isMuted?G.style.color="var(--accent-coral)":G.style.color="")}),console.log("Vantage Voice initialized successfully!")}catch(U){console.error("Failed to initialize Vantage Voice:",U);const F=document.getElementById("loading-state");F&&(F.innerHTML=`
         <div style="color: var(--accent-coral); font-weight: 700; font-size: 1.1rem; margin-bottom: 8px;">
           Failed to load stories database
         </div>
