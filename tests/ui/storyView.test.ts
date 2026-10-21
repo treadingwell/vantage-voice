@@ -143,11 +143,18 @@ describe('StoryView Component', () => {
 
     const repeatPreBtn = container.querySelector('#btn-replay-action');
     expect(repeatPreBtn).not.toBeNull();
-    expect(repeatPreBtn?.textContent).toContain('Repeat Pre-Done Prompt');
+    expect(repeatPreBtn?.getAttribute('title')).toContain('Repeat Pre-Done Prompt');
+    expect(repeatPreBtn?.textContent).toContain('Repeat');
 
     await controller.revealResult();
     const repeatPostBtn = container.querySelector('#btn-replay-audio');
     expect(repeatPostBtn).not.toBeNull();
-    expect(repeatPostBtn?.textContent).toContain('Repeat Post-Done Result');
+    expect(repeatPostBtn?.getAttribute('title')).toContain('Repeat Post-Done Result');
+    expect(repeatPostBtn?.textContent).toContain('Repeat Result');
+
+    const repeatPromptPostBtn = container.querySelector('#btn-replay-prompt-post');
+    expect(repeatPromptPostBtn).not.toBeNull();
+    expect(repeatPromptPostBtn?.getAttribute('title')).toContain('Repeat Pre-Done Prompt');
+    expect(repeatPromptPostBtn?.textContent).toContain('Repeat Prompt');
   });
 });

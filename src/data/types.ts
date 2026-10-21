@@ -20,14 +20,14 @@ export interface BookMeta {
 }
 
 export const BOOKS: BookMeta[] = [
-  { prefix: 'm', name: 'move', label: 'Move', color: '#2563eb', iconId: 'i-move', keyIconId: 'key-move' },
-  { prefix: 'l', name: 'look', label: 'Look', color: '#8b5cf6', iconId: 'i-look', keyIconId: 'key-look' },
-  { prefix: 'e', name: 'engage', label: 'Engage', color: '#10b981', iconId: 'i-engage', keyIconId: 'key-engage' },
-  { prefix: 'h', name: 'help', label: 'Help', color: '#f97316', iconId: 'i-help', keyIconId: 'key-help' },
-  { prefix: 't', name: 'take', label: 'Take', color: '#eab308', iconId: 'i-take', keyIconId: 'key-take' },
-  { prefix: 'o', name: 'overpower', label: 'Overpower', color: '#ef4444', iconId: 'i-overpower', keyIconId: 'key-overpower' },
-  { prefix: 'd', name: 'depart', label: 'Depart', color: '#1e3a8a', iconId: 'i-depart', keyIconId: 'key-depart' },
-  { prefix: 's', name: 'secret', label: 'Book of Secrets', color: '#64748b', iconId: 'i-secret', keyIconId: 'key-secret' },
+  { prefix: 'm', name: 'move', label: 'Move', color: '#2d9cd7', iconId: 'i-move', keyIconId: 'key-move' },
+  { prefix: 'l', name: 'look', label: 'Look', color: '#834d99', iconId: 'i-look', keyIconId: 'key-look' },
+  { prefix: 'e', name: 'engage', label: 'Engage', color: '#f18a3b', iconId: 'i-engage', keyIconId: 'key-engage' },
+  { prefix: 'h', name: 'help', label: 'Help', color: '#00a341', iconId: 'i-help', keyIconId: 'key-help' },
+  { prefix: 't', name: 'take', label: 'Take', color: '#ffd000', iconId: 'i-take', keyIconId: 'key-take' },
+  { prefix: 'o', name: 'overpower', label: 'Overpower', color: '#e41123', iconId: 'i-overpower', keyIconId: 'key-overpower' },
+  { prefix: 'd', name: 'depart', label: 'Depart', color: '#207097', iconId: 'i-depart', keyIconId: 'key-depart' },
+  { prefix: 's', name: 'secret', label: 'Book of Secrets', color: '#4a433d', iconId: 'i-secret', keyIconId: 'key-secret' },
 ];
 
 export const BOOK_BY_PREFIX: Record<BookPrefix, BookMeta> = BOOKS.reduce((acc, book) => {

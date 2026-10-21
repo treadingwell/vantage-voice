@@ -4,15 +4,25 @@
    ========================================================================== */
 
 :root {
-  /* Authentic Vantage Book Skill Colors */
-  --book-move: #1f75bc;
-  --book-look: #7e4798;
-  --book-engage: #1c9d85;
-  --book-help: #e07b24;
-  --book-take: #d4a72c;
-  --book-overpower: #c93b3b;
-  --book-depart: #265380;
-  --book-secret: #4a5568;
+  /* Official Rulepop Colors (vantage.rulepop.com) */
+  --blue: #2d9cd7;
+  --purple: #834d99;
+  --orange: #f18a3b;
+  --green: #00a341;
+  --yellow: #ffd000;
+  --red: #e41123;
+  --blue-dk: #207097;
+  --yellow-dk: #bd8a0a;
+
+  /* Authentic Vantage Book Skill Colors (matched to Rulepop) */
+  --book-move: var(--blue);
+  --book-look: var(--purple);
+  --book-engage: var(--orange);
+  --book-help: var(--green);
+  --book-take: var(--yellow);
+  --book-overpower: var(--red);
+  --book-depart: var(--blue-dk);
+  --book-secret: #4a433d;
 
   /* Theme Palette */
   --bg-deep-space: #0c141f;
@@ -871,18 +881,67 @@ svg.icon {
 .action-html-body span.help,
 .action-html-body span.take,
 .action-html-body span.overpower,
-.action-html-body span.depart {
+.action-html-body span.depart,
+.result-html-body span.engage,
+.result-html-body span.move,
+.result-html-body span.look,
+.result-html-body span.help,
+.result-html-body span.take,
+.result-html-body span.overpower,
+.result-html-body span.depart {
   font-weight: 800;
   letter-spacing: 0.04em;
-  color: var(--accent-amber);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.action-html-body span.move,
+.result-html-body span.move {
+  color: var(--book-move);
+}
+
+.action-html-body span.look,
+.result-html-body span.look {
+  color: var(--book-look);
+}
+
+.action-html-body span.engage,
+.result-html-body span.engage {
+  color: var(--book-engage);
+}
+
+.action-html-body span.help,
+.result-html-body span.help {
+  color: var(--book-help);
+}
+
+.action-html-body span.take,
+.result-html-body span.take {
+  color: var(--book-take);
+}
+
+.action-html-body span.overpower,
+.result-html-body span.overpower {
+  color: var(--book-overpower);
+}
+
+.action-html-body span.depart,
+.result-html-body span.depart {
+  color: var(--book-depart);
 }
 
 .btn-replay-action {
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   color: var(--accent-cyan);
-  width: 36px;
-  height: 36px;
+  width: auto;
+  min-height: 36px;
+  padding: 6px 10px;
+  gap: 5px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
   border-radius: 10px;
   display: flex;
   align-items: center;
@@ -1976,4 +2035,161 @@ span.card-num {
   font-size: 0.8rem;
   font-weight: 600;
   white-space: nowrap;
+}
+
+/* Screen reader only utility */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Inline Skill Icons & Badges */
+.inline-skill-icon {
+  width: 1.15em;
+  height: 1.15em;
+  vertical-align: -0.2em;
+  margin-right: 0.25em;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.char-card-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-subtle);
+  font-weight: 700;
+  white-space: nowrap;
+  font-size: 0.88rem;
+}
+
+.char-card-badge.char-move { border-color: rgba(45, 156, 215, 0.45); color: var(--book-move); }
+.char-card-badge.char-look { border-color: rgba(131, 77, 153, 0.45); color: var(--book-look); }
+.char-card-badge.char-engage { border-color: rgba(241, 138, 59, 0.45); color: var(--book-engage); }
+.char-card-badge.char-help { border-color: rgba(0, 163, 65, 0.45); color: var(--book-help); }
+.char-card-badge.char-take { border-color: rgba(255, 208, 0, 0.45); color: var(--book-take); }
+.char-card-badge.char-overpower { border-color: rgba(228, 17, 35, 0.45); color: var(--book-overpower); }
+
+.char-skill-icon,
+.pair-skill-icon,
+.pod-skill-icon {
+  width: 1.15em;
+  height: 1.15em;
+  vertical-align: -0.18em;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.skill-pair-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 700;
+}
+
+.skill-pair-badge.pair-move { color: var(--book-move); }
+.skill-pair-badge.pair-look { color: var(--book-look); }
+.skill-pair-badge.pair-engage { color: var(--book-engage); }
+.skill-pair-badge.pair-help { color: var(--book-help); }
+.skill-pair-badge.pair-take { color: var(--book-take); }
+.skill-pair-badge.pair-overpower { color: var(--book-overpower); }
+
+.btn-pod-loc {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.btn-pod-loc.btn-pod-move { border-color: rgba(45, 156, 215, 0.5); }
+.btn-pod-loc.btn-pod-look { border-color: rgba(131, 77, 153, 0.5); }
+.btn-pod-loc.btn-pod-engage { border-color: rgba(241, 138, 59, 0.5); }
+.btn-pod-loc.btn-pod-help { border-color: rgba(0, 163, 65, 0.5); }
+.btn-pod-loc.btn-pod-take { border-color: rgba(255, 208, 0, 0.5); }
+.btn-pod-loc.btn-pod-overpower { border-color: rgba(228, 17, 35, 0.5); }
+
+/* ==========================================================================
+   Narrow Mobile Screen Formatting (<= 480px)
+   ========================================================================== */
+@media (max-width: 480px) {
+  .story-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .story-title-group {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .action-top-row {
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .action-content {
+    flex: 1 1 100%;
+    order: 3;
+    min-width: 0;
+  }
+
+  .cost-indicator {
+    order: 1;
+  }
+
+  .btn-replay-action {
+    order: 2;
+    margin-left: auto;
+  }
+
+  .revealed-audio-bar {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 10px;
+  }
+
+  .revealed-audio-bar .btn-audio-action {
+    flex: 1 1 calc(50% - 6px);
+    justify-content: center;
+    font-size: 0.78rem;
+    padding: 6px 8px;
+    white-space: nowrap;
+  }
+
+  .revealed-audio-bar .btn-audio-stop {
+    flex: 1 1 100%;
+  }
+
+  .game-setup-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .setup-bar-actions {
+    flex-wrap: wrap;
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .btn-setup-quick {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .pods-nav-buttons {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+  }
 }

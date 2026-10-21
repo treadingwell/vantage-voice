@@ -278,4 +278,122 @@ describe('VoiceController & State Machine Integration', () => {
       expect(recents[0].label).toContain('ENGAGE 236');
     });
   });
+
+  describe('Flow 8: Speech Prompt Completion Debounce & Auto-Reset', () => {
+    it('accumulates chunks over ~1.0s pause before executing lookup', async () => {
+      vi.useFakeTimers();
+
+      // Simulate live STT microphone firing separate chunks: "transmit on", "2", "3", "6"
+      (speech as any).notifyTranscript('transmit on', true);
+      expect(controller.getState().transcript).toBe('transmit on');
+      expect(controller.getState().mode).toBe('IDLE');
+
+      // 400ms pause, then user says "2"
+      vi.advanceTimersByTime(400);
+      (speech as any).notifyTranscript('2', true);
+      expect(controller.getState().transcript).toBe('transmit on 2');
+      expect(controller.getState().mode).toBe('IDLE');
+
+      // 400ms pause, then user says "3"
+      vi.advanceTimersByTime(400);
+      (speech as any).notifyTranscript('3', true);
+      expect(controller.getState().transcript).toBe('transmit on 2 3');
+      expect(controller.getState().mode).toBe('IDLE');
+
+      // 400ms pause, then user says "6"
+      vi.advanceTimersByTime(400);
+      (speech as any).notifyTranscript('6', true);
+      expect(controller.getState().transcript).toBe('transmit on 2 3 6');
+      expect(controller.getState().mode).toBe('IDLE');
+
+      // Debounce timer (1000ms) runs to completion after speech settles
+      await vi.advanceTimersByTimeAsync(1000);
+
+      // Should have executed lookup for e236!
+      expect(controller.getState().activeResult?.key).toBe('e236');
+      expect(controller.getState().mode).toBe('WAITING_FOR_DONE');
+
+      vi.useRealTimers();
+    });
+
+    it('settles fast control command ("done") in 350ms during WAITING_FOR_DONE', async () => {
+      vi.useFakeTimers();
+
+      // First load e236
+      await controller.handleTextInput('e236');
+      expect(controller.getState().mode).toBe('WAITING_FOR_DONE');
+      expect(controller.getState().isObscured).toBe(true);
+
+      // Player says "done"
+      (speech as any).notifyTranscript('done', true);
+      expect(controller.getState().transcript).toBe('done');
+      expect(controller.getState().isObscured).toBe(true);
+
+      // Fast settle fires after 350ms
+      await vi.advanceTimersByTimeAsync(350);
+      expect(controller.getState().isObscured).toBe(false);
+
+      vi.useRealTimers();
+    });
+
+    it('auto-resets transcript and restores mode prompt after ~1.8 seconds', async () => {
+      vi.useFakeTimers();
+
+      await controller.startListeningCommand();
+      expect(controller.getState().mode).toBe('LISTENING_COMMAND');
+
+      // An unrecognized phrase is spoken
+      await controller.handleTranscript('hello galaxy', true);
+      expect(controller.getState().transcript).toBe('hello galaxy');
+      expect(controller.getState().statusMessage).toContain('No card or location number detected');
+
+      // Advance by 1800ms
+      await vi.advanceTimersByTimeAsync(1800);
+      expect(controller.getState().transcript).toBe('');
+      expect(controller.getState().statusMessage).toContain('Listening... Say e.g. "Transmit on 236"');
+
+      vi.useRealTimers();
+    });
+
+    it('handles voice reset keywords to start fresh lookup', async () => {
+      await controller.handleTextInput('e236');
+      expect(controller.getState().activeResult).not.toBeNull();
+
+      // User says "start over"
+      await controller.handleTranscript('start over', true);
+      expect(controller.getState().activeResult).toBeNull();
+      expect(controller.getState().mode).toBe('LISTENING_COMMAND');
+
+      // User says "clear"
+      await controller.handleTextInput('e236');
+      await controller.handleTranscript('clear', true);
+      expect(controller.getState().activeResult).toBeNull();
+      expect(controller.getState().mode).toBe('LISTENING_COMMAND');
+
+      // User says "new lookup"
+      await controller.handleTextInput('e236');
+      await controller.handleTranscript('new lookup', true);
+      expect(controller.getState().activeResult).toBeNull();
+      expect(controller.getState().mode).toBe('LISTENING_COMMAND');
+    });
+
+    it('supports natural phrasings for lookups', async () => {
+      // 1. "lookup transmit on 236"
+      await controller.handleTranscript('lookup transmit on 236', true);
+      expect(controller.getState().activeResult?.key).toBe('e236');
+
+      // 2. "check engage 236"
+      await controller.handleTranscript('check engage 236', true);
+      expect(controller.getState().activeResult?.key).toBe('e236');
+
+      // 3. "read 236"
+      await controller.handleTranscript('read 236', true);
+      // Multiple options for 236 -> DISAMBIGUATING
+      expect(controller.getState().mode).toBe('DISAMBIGUATING');
+
+      // 4. "card 236"
+      await controller.handleTranscript('card 236', true);
+      expect(controller.getState().mode).toBe('DISAMBIGUATING');
+    });
+  });
 });

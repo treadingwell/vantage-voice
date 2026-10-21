@@ -108,6 +108,13 @@ const NOISE_WORDS = new Set([
   'go',
   'a',
   'an',
+  'lookup',
+  'check',
+  'read',
+  'see',
+  'find',
+  'show',
+  'open',
 ]);
 
 export class StoryDatabase {

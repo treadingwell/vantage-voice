@@ -413,3 +413,102 @@ export function renderIconSvg(iconId: string, className?: string): string {
   const cls = className ? ` class="${className}"` : ' class="icon"';
   return `<svg${cls}${viewBox} aria-hidden="true"><use href="#${cleanId}"></use></svg>`;
 }
+
+/**
+ * Enriches story HTML strings (action and result content) by injecting colored
+ * SVG skill icons next to skill badges and character/setup references.
+ */
+export function enhanceStoryHtmlWithIcons(html: string): string {
+  if (!html) return '';
+
+  const skills = ['move', 'look', 'engage', 'help', 'take', 'overpower', 'depart'] as const;
+
+  if (typeof DOMParser !== 'undefined') {
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(`<body>${html}</body>`, 'text/html');
+
+      // 1. Enrich elements with skill classes (.move, .look, .engage, etc.)
+      for (const skill of skills) {
+        const els = doc.querySelectorAll(`.${skill}`);
+        els.forEach((el) => {
+          if (el.tagName.toLowerCase() === 'svg' || el.querySelector('svg')) {
+            return;
+          }
+          if (el.parentElement?.closest(`.${skill}`)) {
+            return;
+          }
+          const iconHtml = renderIconSvg(`i-${skill}`, `inline-skill-icon icon-${skill}`);
+          el.insertAdjacentHTML('afterbegin', iconHtml);
+        });
+      }
+
+      // 2. Enrich setup character cards in s0 if present
+      const setupListItems = doc.querySelectorAll('.setup-steps-list li');
+      setupListItems.forEach((li) => {
+        if (li.textContent && (li.textContent.includes('character card') || li.querySelector('.card-num'))) {
+          let liHtml = li.innerHTML;
+          const charMap: Record<string, string> = {
+            Move: 'move',
+            Look: 'look',
+            Engage: 'engage',
+            Help: 'help',
+            Take: 'take',
+            Overpower: 'overpower',
+          };
+          for (const [charName, skillKey] of Object.entries(charMap)) {
+            const reg = new RegExp(
+              `\\b${charName}\\s*\\((<span class="card-num">\\d+<\\/span>)\\)`,
+              'g'
+            );
+            liHtml = liHtml.replace(reg, (_match, cardNumSpan) => {
+              const icon = renderIconSvg(`i-${skillKey}`, 'char-skill-icon');
+              return `<span class="char-card-badge char-${skillKey}">${icon} ${charName} (${cardNumSpan})</span>`;
+            });
+          }
+          li.innerHTML = liHtml;
+        }
+      });
+
+      // 3. Enrich 21-Mission Skill Dice Lookup Table
+      const tableCells = doc.querySelectorAll('.setup-mission-table td');
+      tableCells.forEach((td) => {
+        const text = td.textContent?.trim() || '';
+        if (text.includes('+') && !td.querySelector('.skill-pair-badge')) {
+          const parts = text.split('+').map((p) => p.trim());
+          if (parts.length === 2) {
+            const skill1 = parts[0].toLowerCase();
+            const skill2 = parts[1].toLowerCase();
+            if (skills.includes(skill1 as any) && skills.includes(skill2 as any)) {
+              const icon1 = renderIconSvg(`i-${skill1}`, 'pair-skill-icon');
+              const icon2 = renderIconSvg(`i-${skill2}`, 'pair-skill-icon');
+              td.innerHTML = `<span class="skill-pair-badge pair-${skill1}">${icon1} ${parts[0]}</span> + <span class="skill-pair-badge pair-${skill2}">${icon2} ${parts[1]}</span>`;
+            }
+          }
+        }
+      });
+
+      return doc.body.innerHTML;
+    } catch {
+      // Fall through to regex if DOMParser encounters an issue
+    }
+  }
+
+  // Regex fallback
+  let result = html;
+  for (const skill of skills) {
+    const reg = new RegExp(
+      `<span\\s+class=(['"])([^'"]*?\\b${skill}\\b[^'"]*?)\\1>([\\s\\S]*?)<\\/span>`,
+      'gi'
+    );
+    result = result.replace(reg, (fullMatch, quote, classAttr, content) => {
+      if (content.includes('<svg') || content.includes('#i-')) {
+        return fullMatch;
+      }
+      const icon = renderIconSvg(`i-${skill}`, `inline-skill-icon icon-${skill}`);
+      return `<span class=${quote}${classAttr}${quote}>${icon}${content}</span>`;
+    });
+  }
+
+  return result;
+}

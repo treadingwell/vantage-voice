@@ -51,6 +51,11 @@ const RECENT_LOOKUPS_STORAGE_KEY = 'vantage_recent_lookups';
 const HANDS_FREE_STORAGE_KEY = 'vantage_hands_free_mode';
 const MAX_RECENT_LOOKUPS = 8;
 
+export interface VoiceControllerOptions {
+  commandDebounceMs?: number;
+  promptResetMs?: number;
+}
+
 export class VoiceController {
   private db: StoryDatabase;
   private speech: SpeechService;
@@ -60,9 +65,22 @@ export class VoiceController {
   private unsubSpeechState: (() => void) | null = null;
   private unsubTranscript: (() => void) | null = null;
 
-  constructor(db: StoryDatabase, speechService: SpeechService) {
+  private commandDebounceMs: number;
+  private promptResetMs: number;
+  private utteranceBuffer: string = '';
+  private commandSettleTimer: ReturnType<typeof setTimeout> | null = null;
+  private promptResetTimer: ReturnType<typeof setTimeout> | null = null;
+  private interimSilenceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  constructor(
+    db: StoryDatabase,
+    speechService: SpeechService,
+    options?: VoiceControllerOptions
+  ) {
     this.db = db;
     this.speech = speechService;
+    this.commandDebounceMs = options?.commandDebounceMs ?? 1000;
+    this.promptResetMs = options?.promptResetMs ?? 1800;
 
     // Load initial settings
     const storedHandsFree =
@@ -126,11 +144,115 @@ export class VoiceController {
     });
 
     this.unsubTranscript = this.speech.onTranscript((text, isFinal) => {
-      this.handleTranscript(text, isFinal);
+      this.onLiveSpeechTranscript(text, isFinal);
     });
   }
 
+  private onLiveSpeechTranscript(text: string, isFinal: boolean): void {
+    // Clear any pending prompt reset since user is actively speaking
+    if (this.promptResetTimer) {
+      clearTimeout(this.promptResetTimer);
+      this.promptResetTimer = null;
+    }
+
+    if (!isFinal) {
+      if (this.interimSilenceTimer) {
+        clearTimeout(this.interimSilenceTimer);
+        this.interimSilenceTimer = null;
+      }
+
+      // Display accumulated text + current interim segment
+      const currentDisplay = (
+        this.utteranceBuffer ? `${this.utteranceBuffer} ${text}` : text
+      ).trim();
+      this.state.transcript = currentDisplay;
+      this.state.isFinalTranscript = false;
+      this.notify();
+
+      // If user goes completely silent mid-sentence for 2s without a final chunk, auto-reset
+      this.interimSilenceTimer = setTimeout(() => {
+        this.interimSilenceTimer = null;
+        this.resetTranscriptAndPrompt();
+      }, 2000);
+
+      // Reset settle timer so we don't commit while user is speaking
+      if (this.commandSettleTimer) {
+        clearTimeout(this.commandSettleTimer);
+        this.commandSettleTimer = null;
+      }
+      return;
+    }
+
+    // isFinal === true
+    if (this.interimSilenceTimer) {
+      clearTimeout(this.interimSilenceTimer);
+      this.interimSilenceTimer = null;
+    }
+
+    const cleanChunk = text.trim();
+    if (cleanChunk) {
+      this.utteranceBuffer = (
+        this.utteranceBuffer ? `${this.utteranceBuffer} ${cleanChunk}` : cleanChunk
+      ).trim();
+    }
+
+    this.state.transcript = this.utteranceBuffer;
+    this.state.isFinalTranscript = false;
+    this.notify();
+
+    if (this.commandDebounceMs <= 0) {
+      this.commitLiveUtterance();
+      return;
+    }
+
+    // Determine debounce wait:
+    // Fast 1-word control command in WAITING_FOR_DONE triggers after 350ms settle
+    const isFastControl =
+      this.state.mode === 'WAITING_FOR_DONE' &&
+      !/\d/.test(this.utteranceBuffer) &&
+      /^\s*(done|ready|reveal|read|continue|finished|ok|okay|stop|cancel|repeat)\s*$/i.test(
+        this.utteranceBuffer
+      );
+
+    const delay = isFastControl ? Math.min(350, this.commandDebounceMs) : this.commandDebounceMs;
+
+    if (this.commandSettleTimer) {
+      clearTimeout(this.commandSettleTimer);
+      this.commandSettleTimer = null;
+    }
+
+    this.commandSettleTimer = setTimeout(async () => {
+      await this.commitLiveUtterance();
+    }, delay);
+  }
+
+  private async commitLiveUtterance(): Promise<void> {
+    if (this.commandSettleTimer) {
+      clearTimeout(this.commandSettleTimer);
+      this.commandSettleTimer = null;
+    }
+    const full = this.utteranceBuffer.trim();
+    this.utteranceBuffer = '';
+    if (full) {
+      await this.handleTranscript(full, true);
+    }
+  }
+
   public dispose(): void {
+    if (this.commandSettleTimer) {
+      clearTimeout(this.commandSettleTimer);
+      this.commandSettleTimer = null;
+    }
+    if (this.promptResetTimer) {
+      clearTimeout(this.promptResetTimer);
+      this.promptResetTimer = null;
+    }
+    if (this.interimSilenceTimer) {
+      clearTimeout(this.interimSilenceTimer);
+      this.interimSilenceTimer = null;
+    }
+    this.utteranceBuffer = '';
+
     if (this.unsubSpeechState) {
       this.unsubSpeechState();
       this.unsubSpeechState = null;
@@ -171,7 +293,7 @@ export class VoiceController {
         this.state.statusMessage = 'Tap Mic & say e.g. "Transmit on 236"';
         break;
       case 'LISTENING_COMMAND':
-        this.state.statusMessage = 'Listening... Say your command or location';
+        this.state.statusMessage = 'Listening... Say e.g. "Transmit on 236"';
         break;
       case 'DISAMBIGUATING':
         this.state.statusMessage = 'Multiple options — Say your choice or tap below';
@@ -252,6 +374,11 @@ export class VoiceController {
       return;
     }
 
+    if (this.promptResetTimer) {
+      clearTimeout(this.promptResetTimer);
+      this.promptResetTimer = null;
+    }
+
     const clean = transcript.trim();
     if (!clean) {
       return;
@@ -264,11 +391,58 @@ export class VoiceController {
     });
 
     await this.processIntent(intent);
+
+    // Auto-reset transcript & restore prompt after promptResetMs (default ~1.8s)
+    this.schedulePromptReset();
+  }
+
+  private schedulePromptReset(delayMs: number = this.promptResetMs): void {
+    if (this.promptResetTimer) {
+      clearTimeout(this.promptResetTimer);
+      this.promptResetTimer = null;
+    }
+    if (delayMs <= 0) {
+      this.resetTranscriptAndPrompt();
+      return;
+    }
+    this.promptResetTimer = setTimeout(() => {
+      this.resetTranscriptAndPrompt();
+    }, delayMs);
+  }
+
+  private resetTranscriptAndPrompt(): void {
+    if (this.promptResetTimer) {
+      clearTimeout(this.promptResetTimer);
+      this.promptResetTimer = null;
+    }
+    if (this.interimSilenceTimer) {
+      clearTimeout(this.interimSilenceTimer);
+      this.interimSilenceTimer = null;
+    }
+    this.utteranceBuffer = '';
+    this.state.transcript = '';
+    this.state.isFinalTranscript = false;
+    this.updateStatusMessage();
+    this.notify();
   }
 
   public async handleTextInput(text: string): Promise<void> {
     const clean = (text || '').trim();
     if (!clean) return;
+
+    if (this.commandSettleTimer) {
+      clearTimeout(this.commandSettleTimer);
+      this.commandSettleTimer = null;
+    }
+    if (this.promptResetTimer) {
+      clearTimeout(this.promptResetTimer);
+      this.promptResetTimer = null;
+    }
+    if (this.interimSilenceTimer) {
+      clearTimeout(this.interimSilenceTimer);
+      this.interimSilenceTimer = null;
+    }
+    this.utteranceBuffer = '';
 
     await this.unlockAudio();
 
@@ -319,7 +493,11 @@ export class VoiceController {
   private async processIntent(intent: VoiceIntent): Promise<void> {
     switch (intent.type) {
       case 'CANCEL':
-        this.handleCancel();
+        if (/^(clear|reset|start over|new lookup)$/i.test(intent.rawTranscript.trim())) {
+          this.handleCancel(true);
+        } else {
+          this.handleCancel(false);
+        }
         break;
 
       case 'REPEAT':
@@ -565,7 +743,23 @@ export class VoiceController {
     this.notify();
   }
 
-  public handleCancel(): void {
+  public handleCancel(resumeListening: boolean = false): void {
+    if (this.commandSettleTimer) {
+      clearTimeout(this.commandSettleTimer);
+      this.commandSettleTimer = null;
+    }
+    if (this.promptResetTimer) {
+      clearTimeout(this.promptResetTimer);
+      this.promptResetTimer = null;
+    }
+    if (this.interimSilenceTimer) {
+      clearTimeout(this.interimSilenceTimer);
+      this.interimSilenceTimer = null;
+    }
+    this.utteranceBuffer = '';
+    this.state.transcript = '';
+    this.state.isFinalTranscript = false;
+
     this.speech.stopSpeaking();
     this.speech.stopListening();
 
@@ -576,7 +770,12 @@ export class VoiceController {
     this.state.isObscured = true;
     this.parsedResultCache = null;
 
-    this.setMode('IDLE');
+    if (resumeListening || this.state.handsFreeMode) {
+      this.setMode('LISTENING_COMMAND');
+      this.speech.startListening(this.state.handsFreeMode);
+    } else {
+      this.setMode('IDLE');
+    }
   }
 
   public async handleRepeat(target: 'pre' | 'post' | 'auto' = 'auto'): Promise<void> {

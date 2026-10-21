@@ -177,7 +177,23 @@ export function extractNumberFromTranscript(
     return { number: num, remainingText: remaining };
   }
 
-  // Pattern B: direct digits like '236', '43', '1598'
+  // Pattern B1: spaced digits like '2 3 6' or '0 0 1'
+  const spacedDigitsMatch = raw.match(/\b\d(?:\s+\d)+\b/);
+  if (spacedDigitsMatch) {
+    const compactDigits = spacedDigitsMatch[0].replace(/\s+/g, '');
+    const num = parseInt(compactDigits, 10);
+    const idx = spacedDigitsMatch.index ?? 0;
+    const remaining = (
+      raw.slice(0, idx) +
+      ' ' +
+      raw.slice(idx + spacedDigitsMatch[0].length)
+    )
+      .trim()
+      .replace(/\s+/g, ' ');
+    return { number: num, remainingText: remaining };
+  }
+
+  // Pattern B2: direct digits like '236', '43', '1598'
   const digitMatch = raw.match(/\b\d{1,4}\b/);
   if (digitMatch) {
     const num = parseInt(digitMatch[0], 10);
@@ -227,7 +243,8 @@ export function extractNumberFromTranscript(
   return null;
 }
 
-const CANCEL_PATTERN = /\b(cancel|stop|never mind|nevermind|back|exit|abort|close)\b/i;
+const CANCEL_PATTERN =
+  /\b(cancel|stop|never mind|nevermind|back|exit|abort|close|clear|reset|start over|new lookup)\b/i;
 const REPEAT_PRE_PATTERN =
   /\b(repeat action|repeat prompt|repeat cost|say action|read action|read prompt|repeat the action|repeat the prompt|repeat the cost)\b/i;
 const REPEAT_POST_PATTERN =
@@ -337,7 +354,8 @@ export function parseVoiceInput(
 
   // 3. Mode: WAITING_FOR_DONE
   if (context.mode === 'WAITING_FOR_DONE') {
-    if (CONFIRM_DONE_PATTERN.test(lower)) {
+    // Only confirm done if the user is not uttering a new card or location number
+    if (!extractNumberFromTranscript(cleanTranscript) && CONFIRM_DONE_PATTERN.test(lower)) {
       return { type: 'CONFIRM_DONE', rawTranscript: cleanTranscript };
     }
   }

@@ -6,8 +6,10 @@ import {
   StoryLookupResult,
 } from '../data/types';
 import { parseAndFormatResult } from '../speech/ttsFormatter';
-import { renderIconSvg } from './svgSprites';
+import { renderIconSvg, enhanceStoryHtmlWithIcons } from './svgSprites';
 import { VoiceController } from './voiceController';
+
+export { enhanceStoryHtmlWithIcons };
 
 export class StoryView {
   private container: HTMLElement;
@@ -146,20 +148,20 @@ export class StoryView {
                 ${this.renderCostBadge(variant.cost)}
               </div>
               <div class="action-content">
-                <div class="action-html-body">${variant.actionHtml || variant.actionPlain}</div>
+                <div class="action-html-body">${enhanceStoryHtmlWithIcons(variant.actionHtml || variant.actionPlain)}</div>
               </div>
               <button
                 type="button"
                 class="btn-replay-action"
                 id="btn-replay-action"
-                title="🔁 Repeat Pre-Done Prompt"
-                aria-label="🔁 Repeat Pre-Done Prompt"
+                title="Repeat Pre-Done Prompt"
+                aria-label="Repeat Pre-Done Prompt"
               >
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                   <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
                   <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
                 </svg>
-                <span class="btn-repeat-text">🔁 Repeat Pre-Done Prompt</span>
+                <span class="btn-repeat-text">Repeat</span>
               </button>
             </div>
           </section>
@@ -169,7 +171,7 @@ export class StoryView {
             <!-- Blurred Container -->
             <div class="result-content-container ${state.isObscured ? 'spoiler-blurred' : 'spoiler-revealed'}">
               <div class="result-html-body" id="result-html-body">
-                ${this.currentParsedResult ? this.currentParsedResult.mainHtml : variant.resultHtml}
+                ${enhanceStoryHtmlWithIcons(this.currentParsedResult ? this.currentParsedResult.mainHtml : variant.resultHtml)}
               </div>
 
               <!-- Branching Choices (if any) -->
@@ -197,12 +199,19 @@ export class StoryView {
                 : `
               <!-- Audio Controls Bar when Revealed -->
               <div class="revealed-audio-bar">
-                <button type="button" class="btn-audio-action" id="btn-replay-audio" title="🔁 Repeat Post-Done Result">
+                <button type="button" class="btn-audio-action" id="btn-replay-audio" title="Repeat Post-Done Result">
                   <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
                     <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
                     <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
                   </svg>
-                  <span>🔁 Repeat Post-Done Result</span>
+                  <span>🔁 Repeat Result</span>
+                </button>
+                <button type="button" class="btn-audio-action" id="btn-replay-prompt-post" title="Repeat Pre-Done Prompt">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                  </svg>
+                  <span>🔁 Repeat Prompt</span>
                 </button>
                 <button type="button" class="btn-audio-action btn-audio-stop" id="btn-stop-audio" title="Stop Audio">
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
@@ -284,7 +293,7 @@ export class StoryView {
                     <span class="branch-chevron" aria-hidden="true">${isChosen ? '▼' : '▶'}</span>
                   </button>
                   <div class="branch-body-content ${isChosen ? 'is-expanded' : 'is-collapsed'}">
-                    ${choice.html}
+                    ${enhanceStoryHtmlWithIcons(choice.html)}
                   </div>
                 </div>
               `;
@@ -316,12 +325,30 @@ export class StoryView {
           <div class="starting-pods-nav">
             <span class="pods-nav-label">Select Starting Escape Pod:</span>
             <div class="pods-nav-buttons">
-              <button type="button" class="btn-pod-loc" data-loc="2">Move 002</button>
-              <button type="button" class="btn-pod-loc" data-loc="3">Look 003</button>
-              <button type="button" class="btn-pod-loc" data-loc="4">Engage 004</button>
-              <button type="button" class="btn-pod-loc" data-loc="5">Help 005</button>
-              <button type="button" class="btn-pod-loc" data-loc="6">Take 006</button>
-              <button type="button" class="btn-pod-loc" data-loc="7">Overpower 007</button>
+              <button type="button" class="btn-pod-loc btn-pod-move" data-loc="2" title="Move Escape Pod (Location 002)">
+                ${renderIconSvg('i-move', 'pod-skill-icon')}
+                <span>Move 002</span>
+              </button>
+              <button type="button" class="btn-pod-loc btn-pod-look" data-loc="3" title="Look Escape Pod (Location 003)">
+                ${renderIconSvg('i-look', 'pod-skill-icon')}
+                <span>Look 003</span>
+              </button>
+              <button type="button" class="btn-pod-loc btn-pod-engage" data-loc="4" title="Engage Escape Pod (Location 004)">
+                ${renderIconSvg('i-engage', 'pod-skill-icon')}
+                <span>Engage 004</span>
+              </button>
+              <button type="button" class="btn-pod-loc btn-pod-help" data-loc="5" title="Help Escape Pod (Location 005)">
+                ${renderIconSvg('i-help', 'pod-skill-icon')}
+                <span>Help 005</span>
+              </button>
+              <button type="button" class="btn-pod-loc btn-pod-take" data-loc="6" title="Take Escape Pod (Location 006)">
+                ${renderIconSvg('i-take', 'pod-skill-icon')}
+                <span>Take 006</span>
+              </button>
+              <button type="button" class="btn-pod-loc btn-pod-overpower" data-loc="7" title="Overpower Escape Pod (Location 007)">
+                ${renderIconSvg('i-overpower', 'pod-skill-icon')}
+                <span>Overpower 007</span>
+              </button>
             </div>
           </div>
         </div>
@@ -362,6 +389,12 @@ export class StoryView {
     const replayAudioBtn = this.container.querySelector('#btn-replay-audio');
     replayAudioBtn?.addEventListener('click', () => {
       this.controller.handleRepeat('post');
+    });
+
+    // Replay pre-done prompt from revealed audio bar
+    const replayPromptPostBtn = this.container.querySelector('#btn-replay-prompt-post');
+    replayPromptPostBtn?.addEventListener('click', () => {
+      this.controller.handleRepeat('pre');
     });
 
     // Stop audio button

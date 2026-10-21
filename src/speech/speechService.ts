@@ -698,6 +698,7 @@ export class SpeechService {
       recognition.lang = 'en-US';
       recognition.interimResults = true;
       recognition.maxAlternatives = 5;
+      recognition.continuous = this.continuousListening;
 
       // Prefer local processing if supported
       if ('processLocally' in recognition) {

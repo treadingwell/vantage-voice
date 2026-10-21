@@ -4,8 +4,10 @@ import {
   SYMBOL_VIEWBOXES,
   ALL_ICON_IDS,
   injectSvgSprites,
-  renderIconSvg
+  renderIconSvg,
+  enhanceStoryHtmlWithIcons
 } from '../../src/ui/svgSprites';
+import { BOOKS } from '../../src/data/types';
 
 describe('svgSprites', () => {
   beforeEach(() => {
@@ -59,5 +61,66 @@ describe('svgSprites', () => {
       expect(typeof vb).toBe('string');
       expect(vb.split(' ').length).toBe(4);
     }
+  });
+
+  it('matches official Rulepop colors where Engage is Orange and Help is Green', () => {
+    const engageMeta = BOOKS.find((b) => b.name === 'engage');
+    const helpMeta = BOOKS.find((b) => b.name === 'help');
+    const moveMeta = BOOKS.find((b) => b.name === 'move');
+    const lookMeta = BOOKS.find((b) => b.name === 'look');
+    const takeMeta = BOOKS.find((b) => b.name === 'take');
+    const overpowerMeta = BOOKS.find((b) => b.name === 'overpower');
+
+    expect(engageMeta?.color).toBe('#f18a3b');
+    expect(helpMeta?.color).toBe('#00a341');
+    expect(moveMeta?.color).toBe('#2d9cd7');
+    expect(lookMeta?.color).toBe('#834d99');
+    expect(takeMeta?.color).toBe('#ffd000');
+    expect(overpowerMeta?.color).toBe('#e41123');
+  });
+
+  describe('enhanceStoryHtmlWithIcons', () => {
+    it('enriches skill spans with inline SVG icons and classes', () => {
+      const input = "<p>Roll dice to <span class='engage'>TRANSMIT</span> and <span class='move skill'>move</span></p>";
+      const result = enhanceStoryHtmlWithIcons(input);
+
+      expect(result).toContain('<use href="#i-engage"></use>');
+      expect(result).toContain('inline-skill-icon icon-engage');
+      expect(result).toContain('<use href="#i-move"></use>');
+      expect(result).toContain('inline-skill-icon icon-move');
+    });
+
+    it('enriches s0 character cards and 21-mission dice lookup table', () => {
+      const s0Sample = `
+        <ol class="setup-steps-list">
+          <li><strong>Step 2:</strong> Move (<span class="card-num">1435</span>), Look (<span class="card-num">1436</span>), Engage (<span class="card-num">1437</span>), Help (<span class="card-num">1438</span>), Take (<span class="card-num">1439</span>), or Overpower (<span class="card-num">1440</span>).</li>
+        </ol>
+        <table class="setup-mission-table">
+          <tbody>
+            <tr><td>Move + Move</td><td><span class="card-num">1590</span></td></tr>
+            <tr><td>Look + Move</td><td><span class="card-num">1583</span></td></tr>
+          </tbody>
+        </table>
+      `;
+      const result = enhanceStoryHtmlWithIcons(s0Sample);
+
+      // Character card badges
+      expect(result).toContain('char-card-badge char-move');
+      expect(result).toContain('char-card-badge char-engage');
+      expect(result).toContain('char-card-badge char-help');
+
+      // Table pair badges
+      expect(result).toContain('skill-pair-badge pair-move');
+      expect(result).toContain('skill-pair-badge pair-look');
+      expect(result).toContain('<use href="#i-move"></use>');
+      expect(result).toContain('<use href="#i-look"></use>');
+    });
+
+    it('does not duplicate icons if SVG icon is already present', () => {
+      const input = `<span class='engage'><svg class='custom'><use href='#i-engage'/></svg>TRANSMIT</span>`;
+      const result = enhanceStoryHtmlWithIcons(input);
+      const matches = result.match(/use href/g);
+      expect(matches?.length).toBe(1);
+    });
   });
 });
