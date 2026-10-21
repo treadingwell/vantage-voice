@@ -85,6 +85,12 @@ export default defineConfig({
       }
     })
   ],
+  server: {
+    host: Boolean(process.env.npm_config_host) || true
+  },
+  preview: {
+    host: Boolean(process.env.npm_config_host) || true
+  },
   test: {
     environment: 'jsdom',
     globals: true

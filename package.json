@@ -5,9 +5,10 @@
   "description": "100% Offline Voice & Storybook Companion App for Vantage by Stonemaier Games",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview",
+    "preview": "vite preview --host",
+    "preview:host": "vite preview --host",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
