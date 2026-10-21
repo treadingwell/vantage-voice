@@ -188,6 +188,24 @@ export class LookupPad {
           </form>
         </div>
 
+        <!-- 🚀 Game Setup: Card 000 & Card 001 Quick-Launch Bar -->
+        <div class="game-setup-bar" id="game-setup-bar">
+          <div class="setup-bar-header">
+            <span class="setup-rocket-icon" aria-hidden="true">🚀</span>
+            <span class="setup-bar-title">Game Setup: Card 000 &amp; Card 001</span>
+          </div>
+          <div class="setup-bar-actions">
+            <button type="button" class="btn-setup-quick" id="btn-quick-setup-000" title="Orbit Setup (Location 000)">
+              <span class="setup-quick-badge">000</span>
+              <span class="setup-quick-text">Card 000 (Setup)</span>
+            </button>
+            <button type="button" class="btn-setup-quick" id="btn-quick-setup-001" title="Escape Pods (Location 001)">
+              <span class="setup-quick-badge">001</span>
+              <span class="setup-quick-text">Card 001 (Escape Pods)</span>
+            </button>
+          </div>
+        </div>
+
         <!-- Recent Lookups History -->
         <div class="recent-lookups-wrapper" id="recent-lookups-wrapper">
           <div class="recent-lookups-list" id="recent-lookups-list"></div>
@@ -283,6 +301,25 @@ export class LookupPad {
         this.controller.handleTextInput(val);
         input.value = '';
         input.blur();
+      }
+    });
+
+    // Game Setup Quick-Launch Buttons
+    const setup000Btn = this.container.querySelector('#btn-quick-setup-000');
+    setup000Btn?.addEventListener('click', () => {
+      const db = this.controller.getDatabase();
+      const entry = db.getByKey('s0') || db.getByBookAndNumber('s', 0);
+      if (entry) {
+        this.controller.executeLookup(entry, 0);
+      }
+    });
+
+    const setup001Btn = this.container.querySelector('#btn-quick-setup-001');
+    setup001Btn?.addEventListener('click', () => {
+      const db = this.controller.getDatabase();
+      const entry = db.getByKey('s1') || db.getByBookAndNumber('s', 1);
+      if (entry) {
+        this.controller.executeLookup(entry, 0);
       }
     });
 

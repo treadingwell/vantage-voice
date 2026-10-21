@@ -172,7 +172,7 @@ describe('VoiceController & State Machine Integration', () => {
     });
   });
 
-  describe('Flow 5: Cancel & Repeat', () => {
+  describe('Flow 5: Cancel & Enhanced Repeat (Pre-Done and Post-Done)', () => {
     it('cancels active story and returns cleanly to IDLE', async () => {
       await controller.handleTranscript('transmit 236', true);
       expect(controller.getState().activeResult).not.toBeNull();
@@ -183,18 +183,93 @@ describe('VoiceController & State Machine Integration', () => {
       expect(state.mode).toBe('IDLE');
     });
 
-    it('repeats current prompt when repeat command is issued', async () => {
+    it('repeats pre-done action prompt when "repeat" is spoken during WAITING_FOR_DONE', async () => {
       await controller.handleTranscript('transmit 236', true);
+      expect(controller.getState().mode).toBe('WAITING_FOR_DONE');
+      expect(controller.getState().isObscured).toBe(true);
       vi.clearAllMocks();
 
       await controller.handleTranscript('repeat', true);
+      // Pre-done action prompt is spoken
       expect(speech.speak).toHaveBeenCalledWith(
         expect.stringContaining('Roll 6 dice to transmit a signal to your homeworld.')
+      );
+      // Continuous listening re-engaged for "Done"
+      expect(speech.startListening).toHaveBeenCalledWith(true);
+      expect(controller.getState().mode).toBe('WAITING_FOR_DONE');
+    });
+
+    it('repeats post-done result when "repeat" is spoken after "done"', async () => {
+      await controller.handleTranscript('transmit 236', true);
+      await controller.handleTranscript('done', true);
+      expect(controller.getState().isObscured).toBe(false);
+      vi.clearAllMocks();
+
+      await controller.handleTranscript('repeat', true);
+      // Post-done result is spoken
+      expect(speech.speak).toHaveBeenCalledWith(
+        expect.stringContaining('The early days of basic training finally prove useful')
+      );
+      // Continuous listening re-engaged for hands-free repeats/commands
+      expect(speech.startListening).toHaveBeenCalledWith(true);
+    });
+
+    it('distinguishes "repeat action" vs "repeat result" when revealed', async () => {
+      await controller.handleTranscript('transmit 236', true);
+      await controller.handleTranscript('done', true);
+      expect(controller.getState().isObscured).toBe(false);
+
+      // Explicit "repeat action" repeats pre-done prompt
+      vi.clearAllMocks();
+      await controller.handleTranscript('repeat action', true);
+      expect(speech.speak).toHaveBeenCalledWith(
+        expect.stringContaining('Roll 6 dice to transmit a signal to your homeworld.')
+      );
+
+      // Explicit "repeat result" repeats post-done result
+      vi.clearAllMocks();
+      await controller.handleTranscript('repeat result', true);
+      expect(speech.speak).toHaveBeenCalledWith(
+        expect.stringContaining('The early days of basic training finally prove useful')
       );
     });
   });
 
-  describe('Flow 6: Recent Lookups History', () => {
+  describe('Flow 6: Game Setup Cards (000 & 001)', () => {
+    it('loads Card 000 via "location 000", "setup", and "zero zero zero"', async () => {
+      // 1. "location 000"
+      await controller.handleTranscript('location 000', true);
+      expect(controller.getState().activeResult?.key).toBe('s0');
+      expect(controller.getState().activeResult?.number).toBe(0);
+      expect(controller.getState().isObscured).toBe(false);
+      expect(speech.speak).toHaveBeenCalledWith(
+        expect.stringContaining('Starting Setup')
+      );
+
+      // 2. "setup"
+      await controller.handleTranscript('setup', true);
+      expect(controller.getState().activeResult?.key).toBe('s0');
+
+      // 3. "zero zero zero"
+      await controller.handleTranscript('zero zero zero', true);
+      expect(controller.getState().activeResult?.key).toBe('s0');
+    });
+
+    it('loads Card 001 via "location 001" and "zero zero one"', async () => {
+      await controller.handleTranscript('location 001', true);
+      expect(controller.getState().activeResult?.key).toBe('s1');
+      expect(controller.getState().activeResult?.number).toBe(1);
+      expect(controller.getState().isObscured).toBe(false);
+      expect(speech.speak).toHaveBeenCalledWith(
+        expect.stringContaining('The ship malfunctions')
+      );
+
+      await controller.handleTranscript('zero zero one', true);
+      expect(controller.getState().activeResult?.key).toBe('s1');
+    });
+  });
+
+  describe('Flow 7: Recent Lookups History', () => {
     it('adds viewed entries to recent lookups list', async () => {
       await controller.handleTextInput('e236');
       const recents = controller.getState().recentLookups;

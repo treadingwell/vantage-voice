@@ -247,3 +247,38 @@ d:\CODE PROJECTS\vantageapp\
    - Build the Rulepop-inspired Storybook Lookup grid, Numpad, Voice Control Dock, Offline Model Manager modal, and Spoiler-Protected Story Viewer wired to the complete voice interaction loop.
 5. **Workstream 5: Verification, Build & Git Commits**
    - Run TypeScript typechecking, unit tests, production PWA bundle build (`npm run build`), verify Service Worker precaching, and commit cleanly to git.
+
+---
+
+## 7. Game Setup Cards (`000` & `001`), Enhanced "Repeat" Command & Future Destination Tracking Roadmap
+
+### 7.1 Starting Game Setup Cards (`000` and `001`)
+- **Card / Location `000` (Back of the Book of Vantages — Spaceship Orbit Setup)**:
+  - Stored as `s0` in `stories.json` and accessible via voice (*"Location 000"*, *"Card 000"*, *"Setup"*, *"Start game"*), numpad (`0` or `000`), or a dedicated **"🚀 Start New Game (000 & 001)"** quick-action button on the Lookup Pad.
+  - **Step 1**: *"Weeks after receiving a mysterious signal from 'the Traveler,' your ship arrives in the orbit of an uncharted planet. Create the total challenge dice pool using 8 dice plus 2 per player."*
+  - **Step 2**: *"Each player gains a different skill (select or randomize) and its matching character card: Move (1435), Look (1436), Engage (1437), Help (1438), Take (1439), or Overpower (1440). Place the card in the middle of your grid and gain its 'when placed' benefit (2 boost)."*
+  - **Step 3**: *"Each player sets the Time, Morale, and Health trackers matching their character color to: 3 (Brazen), 4 (Daring — recommended for first game), 5 (Practical), or 6 (Cautious)."*
+  - **Step 4**: *"The first player gains 2 skills at random and places the matching mission in the center; they may reroll pairs to get an easier mission:"*
+    - Displays the complete **21-Mission Dice Pair Lookup Table** (`1577`–`1597`) and a direct **"Continue to Location 001 →"** button.
+- **Card / Location `001` (Back of the Book of Secrets — Escape Pods)**:
+  - Stored as `s1` in `stories.json` (`"The ship malfunctions! You have mere seconds to escape..."`), assigning each player their Escape Pod location (`002` Move, `003` Look, `004` Engage, `005` Help, `006` Take, `007` Overpower).
+
+### 7.2 Enhanced "Repeat" Voice Keyword (`pre-done` & `post-done`)
+- Saying **"Repeat"** (or *"Say again"*, *"Repeat that"*, *"Read again"*, *"Repeat action"*, *"Repeat result"*) works at every stage of an entry:
+  1. **Pre-Done (`WAITING_FOR_DONE`)**: Repeats the spoken cost & action prompt (e.g., *"Roll 6 dice to transmit a signal to your homeworld"*) and resumes listening for *"Done"*.
+  2. **Post-Done (`IDLE` / `LISTENING_COMMAND` / `BRANCHING_CHOICE` while a result is revealed)**:
+     - Repeats the full revealed post-done result text (and if a branching choice was selected, repeats that chosen branch outcome, or if waiting at a branching choice prompt, repeats the main result + branch options).
+     - Also supports explicit voice phrases like **"Repeat action"** / **"Repeat prompt"** (to re-hear the pre-done text even after revealing) or **"Repeat result"** (to re-hear the post-done text).
+     - After reading the post-done result aloud, the controller stays listening (or provides a one-tap / voice `"Repeat"` trigger in the dock and story view) so saying `"Repeat"` immediately re-reads the post-done text.
+
+### 7.3 Future Roadmap: Destination & Journey Tracking
+Planned features for future iterations of the Vantage Companion App:
+1. **Automatic Destination Extraction & Breadcrumb Trail**:
+   - Parse `"Go to <span class='loc-num'>241</span>"`, `"exit to 649"`, and ocean tide tables (`058`, `056`, `054`) from revealed results to automatically log the player's current location and chronological path across the planet.
+2. **Multi-Player Crew Location Tracker**:
+   - Track each crewmember's current location number, region (`A`–`F`), and terrain type (Land, City, Interior, Ocean, Sky, Underground) from their starting Escape Pod (`002`–`007`) onward.
+3. **Visited Locations & Action Memory Log**:
+   - Record which actions have already been performed on visited locations (enforcing the 1-action-per-location rule vs. repeatable City/Ocean/Sky locations) and bookmark persistent **Structures** left on locations.
+4. **Fog-of-War Node Graph & Waypoint Notes**:
+   - Build a spoiler-free directional graph of discovered locations (`N`/`E`/`S`/`W` connections from Depart actions) with voice-dictated player notes (e.g., *"Note on 236: Transmission tower for homeworld signal"*).
+

@@ -137,6 +137,7 @@ export interface CancelIntent {
 export interface RepeatIntent {
   type: 'REPEAT';
   rawTranscript: string;
+  target?: 'pre' | 'post' | 'auto';
 }
 
 export interface UnknownIntent {

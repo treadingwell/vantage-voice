@@ -21,6 +21,32 @@ Inspired by [vantage.rulepop.com/#story-lookup](https://vantage.rulepop.com/#sto
 - **Rulepop-Style Keypad & Quick Action Preview**:
   - Full 8-storybook icon selector (`Move`, `Look`, `Engage`, `Help`, `Take`, `Overpower`, `Depart`, `Secret`) and `0–9` numpad.
   - Enter any location number (like `236`) to see instant preview chips of all actions available at that location.
+- **🚀 Guided Game Setup Flow (Cards 000 & 001)**:
+  - Quick-launch bar on the Lookup Pad for **Card 000 (Setup)** and **Card 001 (Escape Pods)**.
+  - Say *"Location 000"*, *"Setup"*, *"Start game"*, *"000"*, or *"Card 001"*.
+  - Full 4-step setup instructions from the back of the Book of Vantages, including the complete **21-Mission Skill Dice Lookup Table** and embedded visual card.
+  - Smooth 1-tap navigation from Card 000 to Card 001, and direct jump buttons to all 6 starting Escape Pod locations (`002`–`007`).
+- **🔁 Enhanced "Repeat" Voice Commands (Pre-Done & Post-Done)**:
+  - Say **"Repeat"**, **"Say again"**, or **"One more time"** at any phase:
+    - **Pre-Done (Obscured)**: Repeats the dice challenge & action prompt (e.g. *"Roll 6 dice to transmit a signal..."*) and keeps listening for *"Done"*.
+    - **Post-Done (Revealed)**: Repeats the revealed outcome text (or branching outcome) and keeps listening hands-free.
+  - Explicit voice targeting: Say **"Repeat action"** / **"Repeat prompt"** to hear the dice prompt again, or **"Repeat result"** to hear the revealed outcome.
+  - On-screen one-tap **🔁 Repeat Pre-Done Prompt** and **🔁 Repeat Post-Done Result** buttons in the Story View.
+
+---
+
+## 🗺️ Future Roadmap: Destination & Journey Tracking
+
+Planned features for future iterations of the Vantage Companion App:
+
+1. **Automatic Destination Extraction & Breadcrumb Trail**:
+   - Parse `"Go to <span class='loc-num'>241</span>"`, `"exit to 649"`, and ocean tide tables (`058`, `056`, `054`) from revealed outcomes to automatically record the crew's chronological path and current location.
+2. **Multi-Player Crew Location Tracker**:
+   - Track each player's individual crewmember position, region (`A`–`F`), and terrain type (Land, City, Interior, Ocean, Sky, Underground) starting from their escape pods (`002`–`007`) across the planetary grid.
+3. **Visited Locations & Action Memory Log**:
+   - Keep a persistent digital ledger of visited cards and performed actions (enforcing the 1-action-per-location rule vs. repeatable City/Ocean/Sky locations) and remember persistent structures left on locations.
+4. **Fog-of-War Directional Node Graph & Waypoint Notes**:
+   - Build a spoiler-free directional connection graph (`N`/`E`/`S`/`W` Depart routes) with player notes (e.g., *"Location 236: Long-range transmitter tower for homeworld signal"*).
 
 ---
 

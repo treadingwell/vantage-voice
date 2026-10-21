@@ -414,5 +414,108 @@ describe('Vantage Data Layer, TTS Formatter & Voice NLP Parser', () => {
         expect(intentSecond.optionIndex).toBe(1);
       }
     });
+
+    it('resolves Setup Cards 000 and 001 via voice without requiring "secret"', () => {
+      // 000 variations
+      const intentLoc000 = parseVoiceInput('location 000', db, { mode: 'IDLE' });
+      expect(intentLoc000.type).toBe('LOOKUP');
+      if (intentLoc000.type === 'LOOKUP') {
+        expect(intentLoc000.result.key).toBe('s0');
+        expect(intentLoc000.variantIndex).toBe(0);
+        expect(intentLoc000.number).toBe(0);
+      }
+
+      const intentSetup = parseVoiceInput('setup', db, { mode: 'IDLE' });
+      expect(intentSetup.type).toBe('LOOKUP');
+      if (intentSetup.type === 'LOOKUP') {
+        expect(intentSetup.result.key).toBe('s0');
+        expect(intentSetup.variantIndex).toBe(0);
+      }
+
+      const intentStartGame = parseVoiceInput('start game', db, { mode: 'IDLE' });
+      expect(intentStartGame.type).toBe('LOOKUP');
+      if (intentStartGame.type === 'LOOKUP') {
+        expect(intentStartGame.result.key).toBe('s0');
+        expect(intentStartGame.variantIndex).toBe(0);
+      }
+
+      const intentTripleZero = parseVoiceInput('triple zero', db, { mode: 'IDLE' });
+      expect(intentTripleZero.type).toBe('LOOKUP');
+      if (intentTripleZero.type === 'LOOKUP') {
+        expect(intentTripleZero.result.key).toBe('s0');
+        expect(intentTripleZero.variantIndex).toBe(0);
+      }
+
+      const intentZeroZeroZero = parseVoiceInput('zero zero zero', db, { mode: 'IDLE' });
+      expect(intentZeroZeroZero.type).toBe('LOOKUP');
+      if (intentZeroZeroZero.type === 'LOOKUP') {
+        expect(intentZeroZeroZero.result.key).toBe('s0');
+        expect(intentZeroZeroZero.variantIndex).toBe(0);
+      }
+
+      // 001 variations
+      const intentLoc001 = parseVoiceInput('location 001', db, { mode: 'IDLE' });
+      expect(intentLoc001.type).toBe('LOOKUP');
+      if (intentLoc001.type === 'LOOKUP') {
+        expect(intentLoc001.result.key).toBe('s1');
+        expect(intentLoc001.variantIndex).toBe(0);
+        expect(intentLoc001.number).toBe(1);
+      }
+
+      const intentCard001 = parseVoiceInput('card 001', db, { mode: 'IDLE' });
+      expect(intentCard001.type).toBe('LOOKUP');
+      if (intentCard001.type === 'LOOKUP') {
+        expect(intentCard001.result.key).toBe('s1');
+        expect(intentCard001.variantIndex).toBe(0);
+      }
+
+      const intentZeroZeroOne = parseVoiceInput('zero zero one', db, { mode: 'IDLE' });
+      expect(intentZeroZeroOne.type).toBe('LOOKUP');
+      if (intentZeroZeroOne.type === 'LOOKUP') {
+        expect(intentZeroZeroOne.result.key).toBe('s1');
+        expect(intentZeroZeroOne.variantIndex).toBe(0);
+      }
+    });
+
+    it('parses enhanced repeat commands with target (auto, pre, post)', () => {
+      // Auto targets
+      const rAuto1 = parseVoiceInput('repeat', db, { mode: 'WAITING_FOR_DONE' });
+      expect(rAuto1.type).toBe('REPEAT');
+      if (rAuto1.type === 'REPEAT') expect(rAuto1.target).toBe('auto');
+
+      const rAuto2 = parseVoiceInput('say again', db, { mode: 'IDLE' });
+      expect(rAuto2.type).toBe('REPEAT');
+      if (rAuto2.type === 'REPEAT') expect(rAuto2.target).toBe('auto');
+
+      const rAuto3 = parseVoiceInput('one more time', db, { mode: 'IDLE' });
+      expect(rAuto3.type).toBe('REPEAT');
+      if (rAuto3.type === 'REPEAT') expect(rAuto3.target).toBe('auto');
+
+      // Pre-done targets
+      const rPre1 = parseVoiceInput('repeat action', db, { mode: 'IDLE' });
+      expect(rPre1.type).toBe('REPEAT');
+      if (rPre1.type === 'REPEAT') expect(rPre1.target).toBe('pre');
+
+      const rPre2 = parseVoiceInput('repeat prompt', db, { mode: 'IDLE' });
+      expect(rPre2.type).toBe('REPEAT');
+      if (rPre2.type === 'REPEAT') expect(rPre2.target).toBe('pre');
+
+      const rPre3 = parseVoiceInput('repeat cost', db, { mode: 'IDLE' });
+      expect(rPre3.type).toBe('REPEAT');
+      if (rPre3.type === 'REPEAT') expect(rPre3.target).toBe('pre');
+
+      // Post-done targets
+      const rPost1 = parseVoiceInput('repeat result', db, { mode: 'IDLE' });
+      expect(rPost1.type).toBe('REPEAT');
+      if (rPost1.type === 'REPEAT') expect(rPost1.target).toBe('post');
+
+      const rPost2 = parseVoiceInput('repeat entry', db, { mode: 'IDLE' });
+      expect(rPost2.type).toBe('REPEAT');
+      if (rPost2.type === 'REPEAT') expect(rPost2.target).toBe('post');
+
+      const rPost3 = parseVoiceInput('repeat story', db, { mode: 'IDLE' });
+      expect(rPost3.type).toBe('REPEAT');
+      if (rPost3.type === 'REPEAT') expect(rPost3.target).toBe('post');
+    });
   });
 });

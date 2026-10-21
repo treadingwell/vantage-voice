@@ -1775,3 +1775,205 @@ span.card-num {
     }
   }
 }
+
+/* ==========================================================================
+   Game Setup (Cards 000 & 001) & Enhanced Repeat Styling
+   ========================================================================== */
+
+.game-setup-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(135deg, rgba(30, 58, 138, 0.45) 0%, rgba(16, 185, 129, 0.2) 100%);
+  border: 1px solid rgba(0, 210, 255, 0.4);
+  border-radius: 12px;
+  padding: 8px 12px;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.setup-bar-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--accent-cyan);
+}
+
+.setup-rocket-icon {
+  font-size: 1.1rem;
+}
+
+.setup-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-setup-quick {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-strong);
+  color: var(--text-main);
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-setup-quick:hover, .btn-setup-quick:active {
+  background: var(--accent-cyan);
+  color: #0b131e;
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 10px var(--accent-cyan-glow);
+}
+
+.setup-quick-badge {
+  background: rgba(0, 0, 0, 0.4);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: var(--font-family-mono);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--accent-amber);
+}
+
+.setup-nav-banner {
+  margin: 12px 0;
+  padding: 12px;
+  background: rgba(23, 36, 53, 0.95);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.btn-setup-nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #1e3a8a, #10b981);
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 0.92rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.btn-setup-nav:hover, .btn-setup-nav:active {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+}
+
+.btn-setup-prev {
+  background: linear-gradient(135deg, #334155, #1e293b);
+  border: 1px solid var(--border-strong);
+}
+
+.setup-nav-row {
+  display: flex;
+  align-items: center;
+}
+
+.starting-pods-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pods-nav-label {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+.pods-nav-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.btn-pod-loc {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-main);
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-pod-loc:hover, .btn-pod-loc:active {
+  background: var(--accent-cyan);
+  color: #0b131e;
+}
+
+.setup-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.setup-steps-list {
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.setup-steps-list li {
+  line-height: 1.5;
+}
+
+.setup-mission-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 10px 0;
+  font-size: 0.85rem;
+}
+
+.setup-mission-table th, .setup-mission-table td {
+  border: 1px solid var(--border-subtle);
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.setup-mission-table th {
+  background: var(--bg-surface-raised);
+  color: var(--accent-cyan);
+}
+
+.setup-mission-table tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.setup-img-card {
+  margin-top: 12px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+}
+
+.setup-img-card img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.btn-repeat-text {
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}

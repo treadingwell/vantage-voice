@@ -106,4 +106,48 @@ describe('StoryView Component', () => {
     expect(controller.getState().activeResult).toBeNull();
     expect(container.classList.contains('is-active')).toBe(false);
   });
+
+  it('renders setup navigation banner for Location 000 and navigates to 001', async () => {
+    await controller.handleTextInput('s0');
+
+    expect(container.querySelector('.setup-nav-000')).not.toBeNull();
+    const nextBtn = container.querySelector('#btn-nav-to-001') as HTMLButtonElement;
+    expect(nextBtn).not.toBeNull();
+    expect(nextBtn.textContent).toContain('Go to Location 001');
+
+    nextBtn.click();
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(controller.getState().activeResult?.key).toBe('s1');
+  });
+
+  it('renders setup navigation and pod buttons for Location 001 and navigates to 000', async () => {
+    await controller.handleTextInput('s1');
+
+    expect(container.querySelector('.setup-nav-001')).not.toBeNull();
+    const prevBtn = container.querySelector('#btn-nav-to-000') as HTMLButtonElement;
+    expect(prevBtn).not.toBeNull();
+    expect(prevBtn.textContent).toContain('Back to Location 000');
+
+    const podBtns = container.querySelectorAll('.btn-pod-loc');
+    expect(podBtns.length).toBe(6); // 002 to 007
+
+    prevBtn.click();
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(controller.getState().activeResult?.key).toBe('s0');
+  });
+
+  it('provides visible repeat pre-done and post-done buttons', async () => {
+    await controller.handleTextInput('e236');
+
+    const repeatPreBtn = container.querySelector('#btn-replay-action');
+    expect(repeatPreBtn).not.toBeNull();
+    expect(repeatPreBtn?.textContent).toContain('Repeat Pre-Done Prompt');
+
+    await controller.revealResult();
+    const repeatPostBtn = container.querySelector('#btn-replay-audio');
+    expect(repeatPostBtn).not.toBeNull();
+    expect(repeatPostBtn?.textContent).toContain('Repeat Post-Done Result');
+  });
 });

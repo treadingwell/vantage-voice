@@ -109,4 +109,20 @@ describe('LookupPad Component', () => {
 
     expect(controller.getState().activeResult?.key).toBe('e236');
   });
+
+  it('launches Card 000 and Card 001 via Game Setup quick buttons', async () => {
+    const setup000Btn = container.querySelector('#btn-quick-setup-000') as HTMLButtonElement;
+    const setup001Btn = container.querySelector('#btn-quick-setup-001') as HTMLButtonElement;
+
+    expect(setup000Btn).not.toBeNull();
+    expect(setup001Btn).not.toBeNull();
+
+    setup000Btn.click();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(controller.getState().activeResult?.key).toBe('s0');
+
+    setup001Btn.click();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(controller.getState().activeResult?.key).toBe('s1');
+  });
 });

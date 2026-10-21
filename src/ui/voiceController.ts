@@ -323,7 +323,7 @@ export class VoiceController {
         break;
 
       case 'REPEAT':
-        await this.handleRepeat();
+        await this.handleRepeat(intent.target ?? 'auto');
         break;
 
       case 'CONFIRM_DONE':
@@ -515,6 +515,8 @@ export class VoiceController {
         await this.speech.startListening(true);
       } else {
         this.setMode('IDLE');
+        // Keep listening so player can say "Repeat" hands-free right after reading
+        await this.speech.startListening(true);
       }
     }
   }
@@ -545,14 +547,16 @@ export class VoiceController {
       await this.speech.startListening(true);
     } else {
       this.setMode('IDLE');
+      // Keep listening so player can say "Repeat" hands-free
+      await this.speech.startListening(true);
     }
   }
 
   // --- Audio Control / Replay / Cancel ---
 
-  public async replayCurrentAudio(): Promise<void> {
+  public async replayCurrentAudio(target: 'pre' | 'post' | 'auto' = 'auto'): Promise<void> {
     await this.unlockAudio();
-    await this.handleRepeat();
+    await this.handleRepeat(target);
   }
 
   public stopAudio(): void {
@@ -575,7 +579,7 @@ export class VoiceController {
     this.setMode('IDLE');
   }
 
-  public async handleRepeat(): Promise<void> {
+  public async handleRepeat(target: 'pre' | 'post' | 'auto' = 'auto'): Promise<void> {
     if (this.state.mode === 'DISAMBIGUATING' && this.state.activeResult) {
       const prompt = formatDisambiguationPrompt(this.state.activeResult);
       await this.speech.speak(prompt);
@@ -583,30 +587,47 @@ export class VoiceController {
       return;
     }
 
-    if (this.state.mode === 'WAITING_FOR_DONE' && this.state.activeResult && this.state.activeVariantIndex !== null) {
-      const variant = this.state.activeResult.variants[this.state.activeVariantIndex];
+    if (!this.state.activeResult || this.state.activeVariantIndex === null) {
+      return;
+    }
+
+    const variant = this.state.activeResult.variants[this.state.activeVariantIndex];
+    if (!variant) return;
+
+    // Resolve 'auto' target: if obscured or waiting for done -> 'pre'; otherwise -> 'post'
+    const resolvedTarget: 'pre' | 'post' =
+      target === 'auto'
+        ? this.state.isObscured || this.state.mode === 'WAITING_FOR_DONE'
+          ? 'pre'
+          : 'post'
+        : target;
+
+    if (resolvedTarget === 'pre') {
       const prompt = formatActionPromptForSpeech(variant, this.state.activeResult.prefix);
       await this.speech.speak(prompt);
       await this.speech.startListening(true);
       return;
     }
 
-    if (this.state.mode === 'BRANCHING_CHOICE' && this.state.activeChoices.length > 0) {
-      const branchPrompt = formatBranchChoicesPrompt(this.state.activeChoices);
-      await this.speech.speak(branchPrompt);
-      await this.speech.startListening(true);
-      return;
+    // resolvedTarget === 'post' (revealed result)
+    if (!this.parsedResultCache) {
+      this.parsedResultCache = parseAndFormatResult(variant.resultHtml);
+      this.state.activeChoices = this.parsedResultCache.choices;
     }
 
-    // Result view replay
-    if (this.state.activeResult && this.state.activeVariantIndex !== null && !this.state.isObscured) {
-      if (this.state.chosenBranchIndex !== null && this.state.activeChoices[this.state.chosenBranchIndex]) {
-        const choice = this.state.activeChoices[this.state.chosenBranchIndex];
-        await this.speech.speak(choice.speechText);
-      } else if (this.parsedResultCache) {
-        await this.speech.speak(this.parsedResultCache.mainSpeechText);
-      }
+    if (this.state.chosenBranchIndex !== null && this.state.activeChoices[this.state.chosenBranchIndex]) {
+      const choice = this.state.activeChoices[this.state.chosenBranchIndex];
+      await this.speech.speak(choice.speechText);
+    } else if (this.state.mode === 'BRANCHING_CHOICE' && this.state.activeChoices.length > 0) {
+      let fullText = this.parsedResultCache?.mainSpeechText || '';
+      const branchPrompt = formatBranchChoicesPrompt(this.state.activeChoices);
+      fullText = fullText ? `${fullText} ${branchPrompt}` : branchPrompt;
+      await this.speech.speak(fullText);
+    } else if (this.parsedResultCache?.mainSpeechText) {
+      await this.speech.speak(this.parsedResultCache.mainSpeechText);
     }
+
+    await this.speech.startListening(true);
   }
 
   public backToLookup(): void {

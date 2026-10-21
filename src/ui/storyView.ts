@@ -133,6 +133,9 @@ export class StoryView {
             : ''
         }
 
+        <!-- Game Setup Navigation Banner (if on Card 000 or Card 001) -->
+        ${this.renderSetupNavBanner(result.number)}
+
         ${
           variant
             ? `
@@ -149,13 +152,14 @@ export class StoryView {
                 type="button"
                 class="btn-replay-action"
                 id="btn-replay-action"
-                title="Speak Action Prompt"
-                aria-label="Speak Action Prompt"
+                title="🔁 Repeat Pre-Done Prompt"
+                aria-label="🔁 Repeat Pre-Done Prompt"
               >
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
                   <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
                   <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
                 </svg>
+                <span class="btn-repeat-text">🔁 Repeat Pre-Done Prompt</span>
               </button>
             </div>
           </section>
@@ -193,12 +197,12 @@ export class StoryView {
                 : `
               <!-- Audio Controls Bar when Revealed -->
               <div class="revealed-audio-bar">
-                <button type="button" class="btn-audio-action" id="btn-replay-audio" title="Replay Story Audio">
+                <button type="button" class="btn-audio-action" id="btn-replay-audio" title="🔁 Repeat Post-Done Result">
                   <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
                     <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
                     <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
                   </svg>
-                  <span>Replay Audio</span>
+                  <span>🔁 Repeat Post-Done Result</span>
                 </button>
                 <button type="button" class="btn-audio-action btn-audio-stop" id="btn-stop-audio" title="Stop Audio">
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
@@ -291,6 +295,41 @@ export class StoryView {
     `;
   }
 
+  private renderSetupNavBanner(number: number): string {
+    if (number === 0) {
+      return `
+        <div class="setup-nav-banner setup-nav-000">
+          <button type="button" class="btn-setup-nav" id="btn-nav-to-001">
+            <span>Next: Go to Location 001 (Escape Pods) →</span>
+          </button>
+        </div>
+      `;
+    }
+    if (number === 1) {
+      return `
+        <div class="setup-nav-banner setup-nav-001">
+          <div class="setup-nav-row">
+            <button type="button" class="btn-setup-nav btn-setup-prev" id="btn-nav-to-000">
+              <span>← Back to Location 000 (Setup)</span>
+            </button>
+          </div>
+          <div class="starting-pods-nav">
+            <span class="pods-nav-label">Select Starting Escape Pod:</span>
+            <div class="pods-nav-buttons">
+              <button type="button" class="btn-pod-loc" data-loc="2">Move 002</button>
+              <button type="button" class="btn-pod-loc" data-loc="3">Look 003</button>
+              <button type="button" class="btn-pod-loc" data-loc="4">Engage 004</button>
+              <button type="button" class="btn-pod-loc" data-loc="5">Help 005</button>
+              <button type="button" class="btn-pod-loc" data-loc="6">Take 006</button>
+              <button type="button" class="btn-pod-loc" data-loc="7">Overpower 007</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+    return '';
+  }
+
   private bindEvents(): void {
     // Back to lookup button
     const backBtn = this.container.querySelector('#btn-back-lookup');
@@ -307,10 +346,10 @@ export class StoryView {
       });
     });
 
-    // Speak / Replay Action prompt button
+    // Speak / Replay Action prompt button (Pre-Done)
     const replayActionBtn = this.container.querySelector('#btn-replay-action');
     replayActionBtn?.addEventListener('click', () => {
-      this.controller.handleRepeat();
+      this.controller.handleRepeat('pre');
     });
 
     // DONE Button
@@ -319,16 +358,82 @@ export class StoryView {
       this.controller.revealResult();
     });
 
-    // Replay audio button
+    // Replay post-done result button
     const replayAudioBtn = this.container.querySelector('#btn-replay-audio');
     replayAudioBtn?.addEventListener('click', () => {
-      this.controller.replayCurrentAudio();
+      this.controller.handleRepeat('post');
     });
 
     // Stop audio button
     const stopAudioBtn = this.container.querySelector('#btn-stop-audio');
     stopAudioBtn?.addEventListener('click', () => {
       this.controller.stopAudio();
+    });
+
+    // Setup navigation
+    const navTo001Btn = this.container.querySelector('#btn-nav-to-001');
+    navTo001Btn?.addEventListener('click', () => {
+      const db = this.controller.getDatabase();
+      const s1 = db.getByKey('s1') || db.getByBookAndNumber('s', 1);
+      if (s1) {
+        this.controller.executeLookup(s1, 0);
+      }
+    });
+
+    const navTo000Btn = this.container.querySelector('#btn-nav-to-000');
+    navTo000Btn?.addEventListener('click', () => {
+      const db = this.controller.getDatabase();
+      const s0 = db.getByKey('s0') || db.getByBookAndNumber('s', 0);
+      if (s0) {
+        this.controller.executeLookup(s0, 0);
+      }
+    });
+
+    // Starting Escape Pod buttons
+    const podBtns = this.container.querySelectorAll<HTMLButtonElement>('.btn-pod-loc');
+    podBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const loc = parseInt(btn.dataset.loc || '', 10);
+        if (!isNaN(loc)) {
+          const db = this.controller.getDatabase();
+          const entries = db.getEntriesForNumber(loc);
+          if (entries.length === 1) {
+            this.controller.executeLookup(entries[0], 0);
+          } else if (entries.length > 1) {
+            this.controller.handleTextInput(String(loc));
+          }
+        }
+      });
+    });
+
+    // Clickable .loc-num in result content
+    this.container.querySelectorAll<HTMLElement>('.loc-num').forEach((el) => {
+      el.style.cursor = 'pointer';
+      el.title = `Jump to location ${el.textContent?.trim()}`;
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const numText = el.textContent?.trim();
+        if (numText) {
+          const num = parseInt(numText, 10);
+          if (!isNaN(num)) {
+            const db = this.controller.getDatabase();
+            if (num === 0) {
+              const entry = db.getByKey('s0') || db.getByBookAndNumber('s', 0);
+              if (entry) this.controller.executeLookup(entry, 0);
+            } else if (num === 1) {
+              const entry = db.getByKey('s1') || db.getByBookAndNumber('s', 1);
+              if (entry) this.controller.executeLookup(entry, 0);
+            } else {
+              const entries = db.getEntriesForNumber(num);
+              if (entries.length === 1) {
+                this.controller.executeLookup(entries[0], 0);
+              } else if (entries.length > 1) {
+                this.controller.handleTextInput(numText);
+              }
+            }
+          }
+        }
+      });
     });
 
     // Branch choice cards

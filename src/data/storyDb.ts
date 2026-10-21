@@ -51,15 +51,27 @@ function stripHtml(html: string): string {
 function extractVerbsFromAction(actionHtml: string): { primary: string | null; all: string[] } {
   if (!actionHtml) return { primary: null, all: [] };
   const matches = [...actionHtml.matchAll(/<span[^>]*>([^<]+)<\/span>/gi)];
-  if (matches.length === 0) return { primary: null, all: [] };
+  if (matches.length > 0) {
+    const verbs = matches
+      .map((m) => m[1].trim().toLowerCase())
+      .filter((v) => v.length > 0);
 
-  const verbs = matches
-    .map((m) => m[1].trim().toLowerCase())
-    .filter((v) => v.length > 0);
+    return {
+      primary: verbs[0] ?? null,
+      all: verbs,
+    };
+  }
+
+  // Fallback: extract keywords from action text (useful for setup cards s0 and s1)
+  const words = stripHtml(actionHtml)
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length > 2 && !NOISE_WORDS.has(w));
 
   return {
-    primary: verbs[0] ?? null,
-    all: verbs,
+    primary: words[0] ?? null,
+    all: words,
   };
 }
 
@@ -191,7 +203,13 @@ export class StoryDatabase {
       prefix = cleanInput as BookPrefix;
     } else if (BOOK_BY_NAME[cleanInput as BookName]) {
       prefix = BOOK_BY_NAME[cleanInput as BookName].prefix;
-    } else if (cleanInput === 'secrets' || cleanInput === 'book of secrets') {
+    } else if (
+      cleanInput === 'secrets' ||
+      cleanInput === 'book of secrets' ||
+      cleanInput === 'vantages' ||
+      cleanInput === 'book of vantages' ||
+      cleanInput === 'setup'
+    ) {
       prefix = 's';
     }
 
@@ -228,6 +246,13 @@ export class StoryDatabase {
 
     // If no cue text provided, return candidates across all entries for this number
     if (tokens.length === 0) {
+      if (entries.length === 1 && entries[0].variants.length === 1) {
+        return {
+          result: entries[0],
+          variantIndex: 0,
+          confidence: 1.0,
+        };
+      }
       const candidates: CandidateMatch[] = [];
       for (const entry of entries) {
         for (const v of entry.variants) {
@@ -342,6 +367,14 @@ export class StoryDatabase {
     }
 
     if (scored.length === 0) {
+      // If there is only one entry and one variant for this number, match it directly
+      if (entries.length === 1 && entries[0].variants.length === 1) {
+        return {
+          result: entries[0],
+          variantIndex: 0,
+          confidence: 0.9,
+        };
+      }
       // No match found among entries
       return null;
     }
@@ -464,7 +497,8 @@ export class StoryDatabase {
       'cancel', 'stop', 'back', 'exit', 'abort',
       'repeat', 'again', 'option', 'choice', 'choose',
       'first', 'second', 'third', 'fourth', 'fifth',
-      'on', 'at', 'in', 'the', 'and'
+      'on', 'at', 'in', 'the', 'and',
+      'setup', 'start', 'starting', 'begin', 'game', 'triple', 'double', 'orbit'
     ]) {
       vocab.add(ctrl);
     }

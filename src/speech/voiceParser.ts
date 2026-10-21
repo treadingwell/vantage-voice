@@ -58,6 +58,8 @@ function isRecognizedNumberWord(w: string): boolean {
     w === 'and' ||
     w === 'hundred' ||
     w === 'thousand' ||
+    w === 'triple' ||
+    w === 'double' ||
     DIGIT_WORDS[w] !== undefined ||
     TEEN_WORDS[w] !== undefined ||
     TENS_WORDS[w] !== undefined
@@ -88,7 +90,17 @@ export function parseNumberWords(words: string[]): number | null {
   if (!words || words.length === 0) return null;
   if (!words.every(isRecognizedNumberWord)) return null;
 
-  // Case 1: All words are single digit words (e.g. ['two', 'three', 'six'], ['zero', 'four', 'one'])
+  // Support 'triple zero', 'double zero', etc.
+  if (words.length === 2 && words[0] === 'triple' && DIGIT_WORDS[words[1]] !== undefined) {
+    const d = DIGIT_WORDS[words[1]];
+    return d === 0 ? 0 : d * 111;
+  }
+  if (words.length === 2 && words[0] === 'double' && DIGIT_WORDS[words[1]] !== undefined) {
+    const d = DIGIT_WORDS[words[1]];
+    return d === 0 ? 0 : d * 11;
+  }
+
+  // Case 1: All words are single digit words (e.g. ['two', 'three', 'six'], ['zero', 'four', 'one'], ['zero', 'zero', 'zero'])
   if (words.length > 1 && words.every((w) => DIGIT_WORDS[w] !== undefined)) {
     const numStr = words.map((w) => DIGIT_WORDS[w]).join('');
     return parseInt(numStr, 10);
@@ -195,11 +207,16 @@ export function extractNumberFromTranscript(
       const slice = tokens.slice(start, start + len);
       // Skip if slice starts or ends with 'and'
       if (slice[0] === 'and' || slice[slice.length - 1] === 'and') continue;
-      // Skip if slice is just standalone preposition 'to' or 'for'
-      if (slice.length === 1 && (slice[0] === 'to' || slice[0] === 'for')) continue;
+      // Skip if slice is just standalone preposition 'to' or 'for' or standalone 'oh' / 'o'
+      if (
+        slice.length === 1 &&
+        (slice[0] === 'to' || slice[0] === 'for' || slice[0] === 'oh' || slice[0] === 'o')
+      ) {
+        continue;
+      }
 
       const num = parseNumberWords(slice);
-      if (num !== null && num >= 1 && num <= 9999) {
+      if (num !== null && num >= 0 && num <= 9999) {
         const remainingTokens = [...tokens.slice(0, start), ...tokens.slice(start + len)];
         const remainingText = remainingTokens.join(' ').trim();
         return { number: num, remainingText };
@@ -211,7 +228,14 @@ export function extractNumberFromTranscript(
 }
 
 const CANCEL_PATTERN = /\b(cancel|stop|never mind|nevermind|back|exit|abort|close)\b/i;
-const REPEAT_PATTERN = /\b(repeat|again|say again|repeat that|what was that|pardon)\b/i;
+const REPEAT_PRE_PATTERN =
+  /\b(repeat action|repeat prompt|repeat cost|say action|read action|read prompt|repeat the action|repeat the prompt|repeat the cost)\b/i;
+const REPEAT_POST_PATTERN =
+  /\b(repeat result|repeat entry|repeat story|read result|read entry|say result|repeat the result|repeat the entry|repeat the story)\b/i;
+const REPEAT_AUTO_PATTERN =
+  /\b(repeat that|say again|read again|one more time|what was that|repeat|again|pardon)\b/i;
+const SETUP_PATTERN =
+  /\b(setup|start game|starting setup|game setup|start new game|begin game)\b/i;
 const CONFIRM_DONE_PATTERN =
   /\b(done|ready|reveal|read|continue|finished|okay|ok|proceed|let's go|lets go|i'm done|im done|we're done|were done)\b/i;
 
@@ -300,9 +324,15 @@ export function parseVoiceInput(
     return { type: 'CANCEL', rawTranscript: cleanTranscript };
   }
 
-  // 2. Check Global Repeat command
-  if (REPEAT_PATTERN.test(lower)) {
-    return { type: 'REPEAT', rawTranscript: cleanTranscript };
+  // 2. Check Global Repeat command (with target pre/post/auto)
+  if (REPEAT_PRE_PATTERN.test(lower)) {
+    return { type: 'REPEAT', target: 'pre', rawTranscript: cleanTranscript };
+  }
+  if (REPEAT_POST_PATTERN.test(lower)) {
+    return { type: 'REPEAT', target: 'post', rawTranscript: cleanTranscript };
+  }
+  if (REPEAT_AUTO_PATTERN.test(lower)) {
+    return { type: 'REPEAT', target: 'auto', rawTranscript: cleanTranscript };
   }
 
   // 3. Mode: WAITING_FOR_DONE
@@ -444,6 +474,20 @@ export function parseVoiceInput(
   }
 
   // 6. Full Lookup Command (works in IDLE, LISTENING_COMMAND, or as fallback)
+  if (SETUP_PATTERN.test(lower)) {
+    const s0Entry = db.getByKey('s0') || db.getByBookAndNumber('s', 0);
+    if (s0Entry) {
+      return {
+        type: 'LOOKUP',
+        result: s0Entry,
+        variantIndex: 0,
+        confidence: 1.0,
+        spokenCue: cleanTranscript,
+        number: 0,
+      };
+    }
+  }
+
   const extracted = extractNumberFromTranscript(cleanTranscript);
 
   if (extracted) {
