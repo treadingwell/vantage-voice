@@ -24,7 +24,7 @@ async function bootstrapApp(): Promise<void> {
     <header class="app-header">
       <div class="header-container">
         <a href="#" class="header-logo-group" id="header-logo-home">
-          <img src="/ui/vantage.webp" alt="Vantage" class="header-logo-img" />
+          <img src="${import.meta.env.BASE_URL}ui/vantage.webp" alt="Vantage" class="header-logo-img" />
           <div class="header-title-text">
             <span class="header-title">Vantage</span>
             <span class="header-subtitle">Voice & Storybook Companion</span>
@@ -65,8 +65,8 @@ async function bootstrapApp(): Promise<void> {
   `;
 
   try {
-    // 3. Load story database from local /data/stories.json
-    const db = await StoryDatabase.loadFromUrl('/data/stories.json');
+    // 3. Load story database from local data/stories.json
+    const db = await StoryDatabase.loadFromUrl(`${import.meta.env.BASE_URL}data/stories.json`);
 
     // 4. Set vocabulary words on speechService for constrained Vosk WASM engine
     speechService.setVocabulary(db.getAllVocabularyWords());

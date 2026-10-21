@@ -119,7 +119,7 @@ export class StoryDatabase {
     this.parseAndIndex(rawJson);
   }
 
-  public static async loadFromUrl(url: string = '/data/stories.json'): Promise<StoryDatabase> {
+  public static async loadFromUrl(url: string = `${import.meta.env.BASE_URL || './'}data/stories.json`): Promise<StoryDatabase> {
     const res = await fetch(url);
     if (!res.ok) {
       throw new Error(`Failed to load stories from ${url}: ${res.statusText}`);

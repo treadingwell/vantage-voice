@@ -3,6 +3,7 @@ import basicSsl from '@vitejs/plugin-basic-ssl';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
+  base: './',
   plugins: [
     basicSsl(),
     VitePWA({
@@ -22,15 +23,15 @@ export default defineConfig({
         background_color: '#0f1722',
         display: 'standalone',
         orientation: 'portrait',
-        start_url: '/',
+        start_url: './',
         icons: [
           {
-            src: '/meta/favicon.png',
+            src: 'meta/favicon.png',
             sizes: '192x192',
             type: 'image/png'
           },
           {
-            src: '/meta/apple-touch-icon.png',
+            src: 'meta/apple-touch-icon.png',
             sizes: '180x180',
             type: 'image/png',
             purpose: 'any maskable'
