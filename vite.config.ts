@@ -11,13 +11,15 @@ export default defineConfig({
       includeAssets: [
         'meta/favicon.png',
         'meta/apple-touch-icon.png',
+        'meta/icon-192.png',
+        'meta/icon-512.png',
         'ui/vantage.webp',
         'data/stories.json',
         'figs/*.webp'
       ],
       manifest: {
-        name: 'Vantage Voice & Storybook Companion',
-        short_name: 'Vantage',
+        name: 'Vantage Voice',
+        short_name: 'Vantage Voice',
         description: '100% Offline Voice & Storybook Companion App for Vantage by Stonemaier Games',
         theme_color: '#182432',
         background_color: '#0f1722',
@@ -26,15 +28,20 @@ export default defineConfig({
         start_url: './',
         icons: [
           {
-            src: 'meta/favicon.png',
+            src: 'meta/icon-192.png',
             sizes: '192x192',
             type: 'image/png'
           },
           {
-            src: 'meta/apple-touch-icon.png',
-            sizes: '180x180',
+            src: 'meta/icon-512.png',
+            sizes: '512x512',
             type: 'image/png',
             purpose: 'any maskable'
+          },
+          {
+            src: 'meta/apple-touch-icon.png',
+            sizes: '180x180',
+            type: 'image/png'
           }
         ]
       },

@@ -24,10 +24,10 @@ async function bootstrapApp(): Promise<void> {
     <header class="app-header">
       <div class="header-container">
         <a href="#" class="header-logo-group" id="header-logo-home">
-          <img src="${import.meta.env.BASE_URL}ui/vantage.webp" alt="Vantage" class="header-logo-img" />
+          <img src="${import.meta.env.BASE_URL}meta/icon-192.png" alt="Vantage Voice" class="header-logo-img" />
           <div class="header-title-text">
-            <span class="header-title">Vantage</span>
-            <span class="header-subtitle">Voice & Storybook Companion</span>
+            <span class="header-title">Vantage Voice</span>
+            <span class="header-subtitle">Offline Storybook Companion</span>
           </div>
         </a>
         <div class="header-actions">
@@ -144,9 +144,9 @@ async function bootstrapApp(): Promise<void> {
       }
     });
 
-    console.log('Vantage Voice & Storybook Companion App initialized successfully!');
+    console.log('Vantage Voice initialized successfully!');
   } catch (err) {
-    console.error('Failed to initialize Vantage Companion App:', err);
+    console.error('Failed to initialize Vantage Voice:', err);
     const loadingState = document.getElementById('loading-state');
     if (loadingState) {
       loadingState.innerHTML = `
