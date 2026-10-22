@@ -82,7 +82,6 @@ export class NeuralNarrator {
   private getAudioContext: () => AudioContext | null;
   private generation = 0;
   private activeSource: AudioBufferSourceNode | null = null;
-  private compressorNode: DynamicsCompressorNode | null = null;
   private masterGainNode: GainNode | null = null;
   private wake: (() => void) | null = null;
 
@@ -142,28 +141,17 @@ export class NeuralNarrator {
   }
 
   private getAudioChain(ctx: AudioContext): AudioNode {
-    if (!this.compressorNode || (this.compressorNode as unknown as { context?: AudioContext }).context !== ctx) {
+    if (!this.masterGainNode || (this.masterGainNode as unknown as { context?: AudioContext }).context !== ctx) {
       try {
-        const compressor = ctx.createDynamicsCompressor();
-        compressor.threshold.value = -20;
-        compressor.knee.value = 20;
-        compressor.ratio.value = 8;
-        compressor.attack.value = 0.003;
-        compressor.release.value = 0.25;
-
         const gain = ctx.createGain();
         gain.gain.value = 1.0;
-
-        compressor.connect(gain);
         gain.connect(ctx.destination);
-
-        this.compressorNode = compressor;
         this.masterGainNode = gain;
       } catch {
         return ctx.destination;
       }
     }
-    return this.compressorNode ?? ctx.destination;
+    return this.masterGainNode ?? ctx.destination;
   }
 
   private play(ctx: AudioContext, audio: GeneratedSpeech): Promise<void> {
@@ -174,9 +162,10 @@ export class NeuralNarrator {
         const abs = Math.abs(samples[i]);
         if (abs > peak) peak = abs;
       }
-      // Normalize chunk volume so every reading (especially options & short prompts) has consistent loudness
+      // Normalize chunk volume so every reading (both Kitten and Supertonic, options & prompts)
+      // plays at a consistent, confident listening volume
       if (peak > 0.005) {
-        const targetPeak = 0.92;
+        const targetPeak = 0.90;
         const gain = Math.min(targetPeak / peak, 5.0);
         if (Math.abs(gain - 1.0) > 0.01) {
           for (let i = 0; i < samples.length; i++) {

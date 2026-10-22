@@ -157,7 +157,8 @@ export class SpeechService {
   private voskRecognizer: KaldiRecognizer | null = null;
   private offlineModelReady = false;
   private vocabularyWords: string[] = [];
-  private audioContext: AudioContext | null = null;
+  private playbackAudioContext: AudioContext | null = null;
+  private micAudioContext: AudioContext | null = null;
   private mediaStream: MediaStream | null = null;
   private mediaSource: MediaStreamAudioSourceNode | null = null;
   private audioProcessor: ScriptProcessorNode | null = null;
@@ -197,21 +198,48 @@ export class SpeechService {
 
   private getNarrator(): NeuralNarrator {
     if (!this.narrator) {
-      this.narrator = new NeuralNarrator(this.getSherpa(), () => this.getAudioContext());
+      this.narrator = new NeuralNarrator(this.getSherpa(), () => this.getPlaybackAudioContext());
     }
     return this.narrator;
   }
 
-  private getAudioContext(): AudioContext | null {
+  /**
+   * Dedicated pure playback AudioContext for TTS. Never connects to getUserMedia or
+   * microphone streams so it is never ducked or treated as voice communication by the OS.
+   */
+  private getPlaybackAudioContext(): AudioContext | null {
     if (typeof window === 'undefined') return null;
     const AudioCtx =
       window.AudioContext ||
       (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!AudioCtx) return null;
-    if (!this.audioContext || this.audioContext.state === 'closed') {
-      this.audioContext = new AudioCtx();
+    if (!this.playbackAudioContext || this.playbackAudioContext.state === 'closed') {
+      try {
+        this.playbackAudioContext = new AudioCtx({ latencyHint: 'playback' });
+      } catch {
+        this.playbackAudioContext = new AudioCtx();
+      }
     }
-    return this.audioContext;
+    return this.playbackAudioContext;
+  }
+
+  /**
+   * Dedicated isolated AudioContext for microphone capture and speech recognition.
+   */
+  private getMicAudioContext(): AudioContext | null {
+    if (typeof window === 'undefined') return null;
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioCtx) return null;
+    if (!this.micAudioContext || this.micAudioContext.state === 'closed') {
+      try {
+        this.micAudioContext = new AudioCtx({ latencyHint: 'interactive' });
+      } catch {
+        this.micAudioContext = new AudioCtx();
+      }
+    }
+    return this.micAudioContext;
   }
 
   // =========================================================================
@@ -228,24 +256,17 @@ export class SpeechService {
 
     try {
       if (typeof window !== 'undefined') {
-        const AudioCtx =
-          window.AudioContext ||
-          (window as unknown as { webkitAudioContext?: typeof AudioContext })
-            .webkitAudioContext;
-
-        if (AudioCtx) {
-          if (!this.audioContext || this.audioContext.state === 'closed') {
-            this.audioContext = new AudioCtx();
-          }
-          if (this.audioContext.state === 'suspended') {
-            await this.audioContext.resume();
+        const ctx = this.getPlaybackAudioContext();
+        if (ctx) {
+          if (ctx.state === 'suspended') {
+            await ctx.resume();
           }
 
           // Play a silent 1-frame Web Audio buffer
-          const buffer = this.audioContext.createBuffer(1, 1, 22050);
-          const source = this.audioContext.createBufferSource();
+          const buffer = ctx.createBuffer(1, 1, 22050);
+          const source = ctx.createBufferSource();
           source.buffer = buffer;
-          source.connect(this.audioContext.destination);
+          source.connect(ctx.destination);
           source.start(0);
         }
 
@@ -1221,7 +1242,8 @@ export class SpeechService {
   }
 
   private recreateVoskRecognizer(): void {
-    if (!this.voskModel || !this.voskModel.ready || !this.audioContext) return;
+    const micCtx = this.getMicAudioContext();
+    if (!this.voskModel || !this.voskModel.ready || !micCtx) return;
 
     if (this.voskRecognizer) {
       try {
@@ -1232,7 +1254,7 @@ export class SpeechService {
 
     const grammar = this.getVoskGrammarString();
     this.voskRecognizer = new this.voskModel.KaldiRecognizer(
-      this.audioContext.sampleRate,
+      micCtx.sampleRate,
       grammar
     );
     this.attachVoskEvents(this.voskRecognizer);
@@ -1273,7 +1295,7 @@ export class SpeechService {
     }
 
     try {
-      if (!this.getAudioContext()) return;
+      if (!this.getMicAudioContext()) return;
       this.recreateVoskRecognizer();
       await this.startMicCapture((buffer) => {
         try {
@@ -1316,7 +1338,7 @@ export class SpeechService {
       await sherpa.loadAsr(SHERPA_STT_MODEL_ID);
       if (!this.isListeningDesired) return;
       sherpa.resetAsr();
-      const sampleRate = this.getAudioContext()?.sampleRate ?? 48000;
+      const sampleRate = this.getMicAudioContext()?.sampleRate ?? 48000;
       await this.startMicCapture((buffer) => {
         // Copy: the worker takes ownership of the transferred buffer
         sherpa.feedAsr(new Float32Array(buffer.getChannelData(0)), sampleRate);
@@ -1338,7 +1360,7 @@ export class SpeechService {
    * speaking (frames are dropped so the recognizer never hears its own voice).
    */
   private async startMicCapture(onAudio: (buffer: AudioBuffer) => void): Promise<void> {
-    const ctx = this.getAudioContext();
+    const ctx = this.getMicAudioContext();
     if (!ctx) throw new Error('Web Audio is not available');
     if (ctx.state === 'suspended') {
       await ctx.resume();

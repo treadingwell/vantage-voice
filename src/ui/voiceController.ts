@@ -558,6 +558,13 @@ export class VoiceController {
 
   // --- Step 1 & 2: Lookup and Disambiguation Flow ---
 
+  private async settleAudioHardware(ms = 60): Promise<void> {
+    if (typeof window === 'undefined' || (typeof process !== 'undefined' && process.env.NODE_ENV === 'test')) {
+      return;
+    }
+    await new Promise((r) => setTimeout(r, ms));
+  }
+
   public async executeLookup(
     result: StoryLookupResult,
     variantIndex: number | null = null,
@@ -566,6 +573,7 @@ export class VoiceController {
     await this.unlockAudio();
     this.speech.stopSpeaking();
     this.speech.stopListening();
+    await this.settleAudioHardware();
     this.voiceFlow = source === 'voice';
 
     this.state.activeResult = result;
@@ -601,6 +609,7 @@ export class VoiceController {
 
     this.speech.stopSpeaking();
     this.speech.stopListening();
+    await this.settleAudioHardware();
 
     await this.selectVariant(this.state.activeResult, index);
   }
@@ -614,6 +623,7 @@ export class VoiceController {
     await this.unlockAudio();
     this.speech.stopSpeaking();
     this.speech.stopListening();
+    await this.settleAudioHardware();
 
     this.state.activeResult = result;
     this.state.activeVariantIndex = variantIndex;
@@ -666,6 +676,7 @@ export class VoiceController {
     // Stop ongoing listening & speech
     this.speech.stopSpeaking();
     this.speech.stopListening();
+    await this.settleAudioHardware();
 
     // Unblur result box
     this.state.isObscured = false;
@@ -698,6 +709,7 @@ export class VoiceController {
     if (parsed.hasChoices && parsed.choices.length > 0) {
       this.setMode('BRANCHING_CHOICE');
       this.speech.stopListening();
+      await this.settleAudioHardware();
       const branchPrompt = formatBranchChoicesPrompt(parsed.choices);
       this.notify();
       await this.speech.speak(branchPrompt);
@@ -721,6 +733,7 @@ export class VoiceController {
 
     this.speech.stopSpeaking();
     this.speech.stopListening();
+    await this.settleAudioHardware();
 
     this.state.chosenBranchIndex = choiceIndex;
     const choice = this.state.activeChoices[choiceIndex];
