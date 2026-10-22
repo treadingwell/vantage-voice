@@ -6,6 +6,7 @@ import {
   htmlToSpeechText,
 } from '../../src/speech/ttsFormatter';
 import { splitIntoSentences } from '../../src/speech/neuralNarrator';
+import { voiceTestText } from '../../src/ui/settingsModal';
 
 describe('numberToWords', () => {
   it('reads small quantities normally', () => {
@@ -158,5 +159,18 @@ describe('X dice marker formatting', () => {
     expect(normalizeForSpeech('Multiple options for Depart forty three: East or North. Which one?')).toBe(
       'Multiple options for Depart forty three. East or North. Which one?'
     );
+  });
+});
+
+describe('voice test sample', () => {
+  it('keeps every sentence as its own narrator chunk so the pause is audible', () => {
+    const text = normalizeForSpeech(voiceTestText(1.2, 250, true));
+    expect(splitIntoSentences(text)).toHaveLength(4);
+    expect(text).toContain('one point two times speed with a zero point three second pause');
+  });
+
+  it('describes normal speed, no pause, and skips the pause for the phone voice', () => {
+    expect(voiceTestText(1, 0, true)).toContain('normal speed with no extra pause');
+    expect(voiceTestText(1, 250, false)).toMatch(/^This is your narrator reading at normal speed\./);
   });
 });

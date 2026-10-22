@@ -73,6 +73,28 @@ const TTS_OPTIONS: EngineOption<TtsEngineMode>[] = [
   },
 ];
 
+/**
+ * Sample for "Test Voice & Speed": names the current settings, then reads story-style
+ * sentences. Every sentence has at least 7 words, so the narrator keeps them as separate
+ * chunks and the sentence pause is audible between each (shorter ones get merged).
+ */
+export function voiceTestText(rate: number, pauseMs: number, neural: boolean): string {
+  const speed = Math.abs(rate - 1) < 0.05 ? 'normal speed' : `${rate.toFixed(1)} times speed`;
+  let pause = '';
+  if (neural) {
+    pause =
+      pauseMs === 0
+        ? ' with no extra pause between sentences'
+        : ` with a ${Math.round(pauseMs / 100) / 10} second pause between sentences`;
+  }
+  return [
+    `This is your narrator reading at ${speed}${pause}.`,
+    'Listen for the short break after each sentence ends.',
+    'A translucent pink sentient blinks into existence from the tower lights.',
+    'Roll four dice to stun it, then gain two health and lose one morale.',
+  ].join(' ');
+}
+
 export class SettingsModal {
   private container: HTMLElement;
   private controller: VoiceController;
@@ -505,7 +527,11 @@ export class SettingsModal {
     testVoiceBtn?.addEventListener('click', async () => {
       await this.speech.unlockAudio();
       await this.speech.speak(
-        'Vantage voice system online. Roll six dice to transmit a signal to your homeworld. Say done when ready.'
+        voiceTestText(
+          this.speech.getSpeechRate(),
+          this.speech.getSentencePauseMs(),
+          this.speech.isTtsEngineActive()
+        )
       );
     });
   }
