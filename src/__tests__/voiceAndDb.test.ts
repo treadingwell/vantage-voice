@@ -239,6 +239,20 @@ describe('Vantage Data Layer, TTS Formatter & Voice NLP Parser', () => {
       expect(prompt).toBe('Option 1: Let them live. Option 2: Finish them. Which do you choose?');
     });
 
+    it('formats sequential choices prompt cleanly without duplicating action sentences', () => {
+      const o235 = db.getByKey('o235')!;
+      const parsed = parseAndFormatResult(o235.variants[0].resultHtml);
+      expect(parsed.isSequential).toBe(true);
+      expect(parsed.choices.length).toBe(3);
+
+      const promptStep0 = formatBranchChoicesPrompt(parsed.choices, true, 0);
+      expect(promptStep0).toBe('Say "Continue" to read the next result, or say "Done" to stop.');
+      expect(promptStep0).not.toContain('You may either stop or continue');
+
+      const promptFinal = formatBranchChoicesPrompt(parsed.choices, true, 2);
+      expect(promptFinal).toBe('Say "Continue" to read the final result, or say "Done" to stop.');
+    });
+
     it('handles entries with X dice marker and formats with "Roll any number of dice;"', () => {
       const e20 = db.getByKey('e20')!;
       expect(e20).toBeDefined();

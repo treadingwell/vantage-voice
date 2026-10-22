@@ -1330,15 +1330,17 @@ span.card-num {
   fill: currentColor;
 }
 
-/* Inline dice cost icons: crisp light rounded background so black hex stands out */
+/* Inline dice cost icons: dark slate badge with silver border and high-contrast white digits */
 svg.◊:has(use[href*="cost"]),
 svg.rulepop-symbol-svg:has(use[href*="cost"]),
 svg.inline-cost-dice-svg {
-  background: #f8fafc;
-  border-radius: 4px;
-  padding: 1px;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+  background: #1e293b;
+  border-radius: 6px;
+  padding: 2px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.18);
   vertical-align: -0.22em;
+  color: #ffffff;
+  fill: #ffffff;
 }
 
 /* ==========================================================================
@@ -2393,13 +2395,14 @@ svg.inline-cost-dice-svg {
   color: #ffffff;
 }
 
-/* Cost hexagon is drawn dark (as on the printed cards); give it a light badge so it
-   reads on the dark story card */
+/* Challenge dice badge in action header: cohesive dark slate badge with high-contrast dice icon */
 .cost-svg-wrapper {
-  background: #e8edf3;
+  background: #1e293b;
   border-radius: 12px;
   padding: 4px;
-  box-shadow: 0 0 0 1px var(--border-strong);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+  fill: #ffffff;
 }
 
 /* Game-term icon words in story text ("2 boost", "$5", "the Traveler") */
@@ -2414,6 +2417,31 @@ svg.inline-cost-dice-svg {
   vertical-align: -0.22em;
   margin-right: 0.2em;
   display: inline-block;
+}
+
+.icon-word-health .icon-word-icon {
+  color: var(--red);
+  fill: var(--red);
+}
+
+.icon-word-morale .icon-word-icon {
+  color: #fbbf24;
+  fill: #fbbf24;
+}
+
+.icon-word-time .icon-word-icon {
+  color: var(--accent-cyan);
+  fill: var(--accent-cyan);
+}
+
+.icon-word-boost .icon-word-icon {
+  color: #38bdf8;
+  fill: #38bdf8;
+}
+
+.icon-word-reserve .icon-word-icon {
+  color: #94a3b8;
+  fill: #94a3b8;
 }
 
 /* Skill words ("1 move") already carry an icon; make them bold to match */

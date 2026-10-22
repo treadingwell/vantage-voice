@@ -375,12 +375,7 @@ export function formatBranchChoicesPrompt(
 ): string {
   if (!choices || choices.length === 0) return '';
   if (isSequential) {
-    const nextChoice = choices[activeStep];
     const isFinal = activeStep >= choices.length - 1;
-    if (nextChoice?.actionHtml) {
-      const spokenAction = htmlToSpeechText(nextChoice.actionHtml).replace(/[.;]+$/, '');
-      return `You may either stop or continue with an ${spokenAction} action. Say "Continue" to read the ${isFinal ? 'final' : 'next'} result, or say "Done" to stop.`;
-    }
     return `Say "Continue" to read the ${isFinal ? 'final' : 'next'} result, or say "Done" to stop.`;
   }
   const parts = choices.map((c) => `Option ${c.index + 1}: ${c.summary.replace(/[.!?]+$/, '')}.`);
