@@ -29,6 +29,8 @@ describe('VoiceController & State Machine Integration', () => {
     vi.spyOn(speech, 'stopSpeaking').mockImplementation(() => {});
     vi.spyOn(speech, 'unlockAudio').mockResolvedValue(true);
 
+    // setHandsFreeMode persists, so start every test from the default
+    localStorage.removeItem('vantage_hands_free_mode');
     controller = new VoiceController(db, speech);
   });
 
@@ -38,6 +40,54 @@ describe('VoiceController & State Machine Integration', () => {
     expect(state.activeResult).toBeNull();
     expect(state.activeVariantIndex).toBeNull();
     expect(state.isObscured).toBe(true);
+  });
+
+  describe('Hands-free setting controls automatic listening', () => {
+    it('hands-free off + tapped lookup: never turns the mic on by itself', async () => {
+      controller.setHandsFreeMode(false);
+      await controller.executeLookup(db.getByKey('e236')!, null);
+      expect(controller.getState().mode).toBe('WAITING_FOR_DONE');
+      expect(speech.startListening).not.toHaveBeenCalled();
+
+      await controller.revealResult();
+      expect(speech.startListening).not.toHaveBeenCalled();
+      expect(controller.getState().mode).toBe('IDLE');
+    });
+
+    it('hands-free off + spoken lookup: listens for "done", then turns the mic off after the result', async () => {
+      controller.setHandsFreeMode(false);
+      await controller.handleTranscript('transmit on 236', true);
+      expect(speech.startListening).toHaveBeenCalledWith(true);
+
+      vi.mocked(speech.startListening).mockClear();
+      vi.mocked(speech.stopListening).mockClear();
+      await controller.handleTranscript('done', true);
+
+      expect(controller.getState().isObscured).toBe(false);
+      expect(controller.getState().mode).toBe('IDLE');
+      expect(speech.startListening).not.toHaveBeenCalled();
+      expect(speech.stopListening).toHaveBeenCalled();
+    });
+
+    it('a tapped lookup after a spoken one does not inherit voice listening', async () => {
+      controller.setHandsFreeMode(false);
+      await controller.handleTranscript('transmit on 236', true);
+      vi.mocked(speech.startListening).mockClear();
+
+      await controller.executeLookup(db.getByKey('d113')!, null);
+      expect(speech.startListening).not.toHaveBeenCalled();
+    });
+
+    it('hands-free on: listens for answers and returns to command listening after the result', async () => {
+      controller.setHandsFreeMode(true);
+      await controller.executeLookup(db.getByKey('e236')!, null);
+      expect(speech.startListening).toHaveBeenCalledWith(true);
+
+      vi.mocked(speech.startListening).mockClear();
+      await controller.revealResult();
+      expect(controller.getState().mode).toBe('LISTENING_COMMAND');
+      expect(speech.startListening).toHaveBeenCalledWith(true);
+    });
   });
 
   describe('Flow 1: Single Variant Entry (e236 "Transmit on 236")', () => {

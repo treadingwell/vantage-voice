@@ -46,6 +46,8 @@ export interface VoiceControllerState {
   recentLookups: RecentLookupItem[];
 }
 
+export type InputSource = 'voice' | 'tap';
+
 export type StateListener = (state: VoiceControllerState) => void;
 
 const RECENT_LOOKUPS_STORAGE_KEY = 'vantage_recent_lookups';
@@ -72,6 +74,9 @@ export class VoiceController {
   private commandSettleTimer: ReturnType<typeof setTimeout> | null = null;
   private promptResetTimer: ReturnType<typeof setTimeout> | null = null;
   private interimSilenceTimer: ReturnType<typeof setTimeout> | null = null;
+  // True while the current lookup was started by voice; lets the mic answer its prompts
+  // ("done", options) even when hands-free mode is off
+  private voiceFlow = false;
 
   constructor(
     db: StoryDatabase,
@@ -397,7 +402,7 @@ export class VoiceController {
       activeChoices: this.state.activeChoices,
     });
 
-    await this.processIntent(intent);
+    await this.processIntent(intent, 'voice');
 
     // Auto-reset transcript & restore prompt after promptResetMs (default ~1.8s)
     this.schedulePromptReset();
@@ -460,7 +465,7 @@ export class VoiceController {
       const num = parseInt(directKeyMatch[2], 10);
       const res = this.db.getByBookAndNumber(prefix, num);
       if (res) {
-        await this.executeLookup(res, null);
+        await this.executeLookup(res, null, 'tap');
         return;
       }
     }
@@ -470,7 +475,7 @@ export class VoiceController {
       const num = parseInt(clean, 10);
       const entries = this.db.getEntriesForNumber(num);
       if (entries.length === 1) {
-        await this.executeLookup(entries[0], null);
+        await this.executeLookup(entries[0], null, 'tap');
         return;
       } else if (entries.length > 1) {
         const candidates: CandidateMatch[] = entries.flatMap((e) =>
@@ -494,10 +499,10 @@ export class VoiceController {
       activeChoices: this.state.activeChoices,
     });
 
-    await this.processIntent(intent);
+    await this.processIntent(intent, 'tap');
   }
 
-  private async processIntent(intent: VoiceIntent): Promise<void> {
+  private async processIntent(intent: VoiceIntent, source: InputSource): Promise<void> {
     switch (intent.type) {
       case 'CANCEL':
         if (/^(clear|reset|start over|new lookup)$/i.test(intent.rawTranscript.trim())) {
@@ -526,7 +531,7 @@ export class VoiceController {
         break;
 
       case 'LOOKUP':
-        await this.executeLookup(intent.result, intent.variantIndex);
+        await this.executeLookup(intent.result, intent.variantIndex, source);
         break;
 
       case 'AMBIGUOUS_LOOKUP':
@@ -536,10 +541,9 @@ export class VoiceController {
           this.state.statusMessage = `Multiple matches for ${intent.number}. Which action or book?`;
           this.notify();
           const prompt = `Multiple actions available for ${intent.number}. Which one?`;
+          this.voiceFlow = source === 'voice';
           await this.speech.speak(prompt);
-          if (this.state.handsFreeMode || this.speech.isListening()) {
-            await this.speech.startListening(true);
-          }
+          await this.listenForAnswer();
         }
         break;
 
@@ -556,9 +560,11 @@ export class VoiceController {
 
   public async executeLookup(
     result: StoryLookupResult,
-    variantIndex: number | null = null
+    variantIndex: number | null = null,
+    source: InputSource = 'tap'
   ): Promise<void> {
     await this.unlockAudio();
+    this.voiceFlow = source === 'voice';
 
     this.state.activeResult = result;
     this.parsedResultCache = null;
@@ -583,8 +589,8 @@ export class VoiceController {
 
     await this.speech.speak(promptText);
 
-    // Auto-listen for option after TTS finishes prompt
-    await this.speech.startListening(true);
+    // Listen for the chosen option after the prompt
+    await this.listenForAnswer();
   }
 
   public async selectDisambiguationOption(index: number): Promise<void> {
@@ -637,8 +643,8 @@ export class VoiceController {
 
     await this.speech.speak(promptText);
 
-    // After TTS finishes speaking the prompt, auto-listen for "Done"
-    await this.speech.startListening(true);
+    // Listen for "Done" after the prompt
+    await this.listenForAnswer();
   }
 
   // --- Step 4: Result Reveal & Read Aloud ---
@@ -691,18 +697,11 @@ export class VoiceController {
       this.notify();
       await this.speech.speak(branchPrompt);
 
-      // Auto-listen for choice selection
-      await this.speech.startListening(true);
+      // Listen for the branch choice
+      await this.listenForAnswer();
     } else {
       // Completed reading result with no sub-choices
-      if (this.state.handsFreeMode) {
-        this.setMode('LISTENING_COMMAND');
-        await this.speech.startListening(true);
-      } else {
-        this.setMode('IDLE');
-        // Keep listening so player can say "Repeat" hands-free right after reading
-        await this.speech.startListening(true);
-      }
+      await this.finishFlow();
     }
   }
 
@@ -727,13 +726,27 @@ export class VoiceController {
       await this.speech.speak(choice.speechText);
     }
 
+    await this.finishFlow();
+  }
+
+  /** Turns the mic on for a prompt's answer: always in hands-free mode, otherwise only
+   *  when this lookup was started by voice. */
+  private async listenForAnswer(): Promise<void> {
+    if (this.state.handsFreeMode || this.voiceFlow) {
+      await this.speech.startListening(true);
+    }
+  }
+
+  /** End of a lookup: hands-free returns to listening for commands, otherwise the mic
+   *  turns off until the player taps it. */
+  private async finishFlow(): Promise<void> {
+    this.voiceFlow = false;
     if (this.state.handsFreeMode) {
       this.setMode('LISTENING_COMMAND');
       await this.speech.startListening(true);
     } else {
       this.setMode('IDLE');
-      // Keep listening so player can say "Repeat" hands-free
-      await this.speech.startListening(true);
+      this.speech.stopListening();
     }
   }
 

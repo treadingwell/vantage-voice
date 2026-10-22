@@ -237,7 +237,7 @@ export class SettingsModal {
             <div class="toggle-row">
               <div class="toggle-info">
                 <label for="toggle-hands-free" class="toggle-title">Hands-Free Continuous Listening</label>
-                <div class="toggle-desc">Automatically returns to listening for commands after reading story entries.</div>
+                <div class="toggle-desc">On: the mic stays on and listens for your next command after each story entry. Off: the mic only answers prompts for lookups you spoke, then turns off.</div>
               </div>
               <input
                 type="checkbox"
