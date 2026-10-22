@@ -25,6 +25,8 @@ export interface ModelEntry {
   dir: string;
   approxMB: number;
   files: string[];
+  /** Files served in pieces (GitHub Pages caps files at 100 MB): name -> part count */
+  parts?: Record<string, number>;
   voices?: ModelVoice[];
 }
 
@@ -57,6 +59,13 @@ export function modelFileUrl(baseUrl: string, dir: string, file: string): string
 
 function entryUrls(entry: ModelEntry | RuntimeEntry, baseUrl: string): string[] {
   return entry.files.map((f) => modelFileUrl(baseUrl, entry.dir, f));
+}
+
+/** Network URLs that make up one file: the file itself, or its .partN pieces in order. */
+export function filePartUrls(entry: ModelEntry | RuntimeEntry, file: string, baseUrl: string): string[] {
+  const url = modelFileUrl(baseUrl, entry.dir, file);
+  const n = 'parts' in entry ? entry.parts?.[file] : undefined;
+  return n ? Array.from({ length: n }, (_, i) => `${url}.part${i}`) : [url];
 }
 
 async function openCache(): Promise<Cache | null> {
@@ -93,37 +102,41 @@ export async function downloadModel(
   const cache = await openCache();
   if (!cache) throw new Error('Offline storage is not available in this browser.');
 
-  const urls = [...entryUrls(entry, baseUrl)];
+  const files: Array<[ModelEntry | RuntimeEntry, string]> = entry.files.map((f) => [entry, f]);
   if (!(await allCached(entryUrls(SHERPA_RUNTIME, baseUrl)))) {
-    urls.push(...entryUrls(SHERPA_RUNTIME, baseUrl));
+    files.push(...SHERPA_RUNTIME.files.map((f): [RuntimeEntry, string] => [SHERPA_RUNTIME, f]));
   }
 
   // Content-Length isn't always exposed, so the estimate seeds the total until real sizes arrive
   let totalBytes = (entry.approxMB + SHERPA_RUNTIME.approxMB) * 1024 * 1024;
   let loadedBytes = 0;
 
-  for (const url of urls) {
+  for (const [owner, file] of files) {
+    const url = modelFileUrl(baseUrl, owner.dir, file);
     if (await cache.match(url)) continue;
 
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`Download failed (${res.status}) for ${url.split('/').pop()}`);
-
+    // Split files are fetched piece by piece and cached whole under their real name
     const chunks: Uint8Array[] = [];
-    if (res.body) {
-      const reader = res.body.getReader();
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        chunks.push(value);
-        loadedBytes += value.byteLength;
-        totalBytes = Math.max(totalBytes, loadedBytes);
+    for (const partUrl of filePartUrls(owner, file, baseUrl)) {
+      const res = await fetch(partUrl);
+      if (!res.ok) throw new Error(`Download failed (${res.status}) for ${partUrl.split('/').pop()}`);
+
+      if (res.body) {
+        const reader = res.body.getReader();
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          loadedBytes += value.byteLength;
+          totalBytes = Math.max(totalBytes, loadedBytes);
+          onProgress?.(loadedBytes, totalBytes);
+        }
+      } else {
+        const buf = new Uint8Array(await res.arrayBuffer());
+        chunks.push(buf);
+        loadedBytes += buf.byteLength;
         onProgress?.(loadedBytes, totalBytes);
       }
-    } else {
-      const buf = new Uint8Array(await res.arrayBuffer());
-      chunks.push(buf);
-      loadedBytes += buf.byteLength;
-      onProgress?.(loadedBytes, totalBytes);
     }
 
     await cache.put(url, new Response(new Blob(chunks as BlobPart[])));

@@ -3,6 +3,7 @@ import {
   SHERPA_MODELS,
   SHERPA_RUNTIME,
   deleteModel,
+  filePartUrls,
   downloadModel,
   getModel,
   isModelDownloaded,
@@ -104,6 +105,23 @@ describe('modelStore', () => {
     fetchMock.mockResolvedValueOnce(new Response('', { status: 404 }));
     const model = getModel('kitten-nano')!;
     await expect(downloadModel(model, undefined, BASE)).rejects.toThrow(`Download failed (404) for ${model.files[0].split('/').pop()}`);
+  });
+
+  it('downloads split files piece by piece and caches them under their real name', async () => {
+    const kokoro = getModel('kokoro-v1')!;
+    expect(kokoro.parts?.['model.int8.onnx']).toBe(2);
+    expect(filePartUrls(kokoro, 'model.int8.onnx', BASE)).toEqual([
+      `${BASE}${kokoro.dir}/model.int8.onnx.part0`,
+      `${BASE}${kokoro.dir}/model.int8.onnx.part1`,
+    ]);
+    expect(filePartUrls(kokoro, 'voices.bin', BASE)).toEqual([`${BASE}${kokoro.dir}/voices.bin`]);
+
+    await downloadModel(kokoro, undefined, BASE);
+    const fetched = fetchMock.mock.calls.map(([url]) => url as string);
+    expect(fetched).toContain(`${BASE}${kokoro.dir}/model.int8.onnx.part1`);
+    expect(fetched).not.toContain(`${BASE}${kokoro.dir}/model.int8.onnx`);
+    expect(store.has(`${BASE}${kokoro.dir}/model.int8.onnx`)).toBe(true);
+    expect(await isModelDownloaded(kokoro, BASE)).toBe(true);
   });
 
   it('reads cached files without touching the network', async () => {

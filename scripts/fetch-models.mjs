@@ -4,7 +4,7 @@
 // are skipped.
 //
 // Usage: node scripts/fetch-models.mjs
-import { createWriteStream, existsSync, mkdirSync, copyFileSync, renameSync, rmSync, mkdtempSync } from 'node:fs';
+import { createWriteStream, existsSync, mkdirSync, copyFileSync, renameSync, rmSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -35,9 +35,27 @@ copyFileSync(
 );
 console.log('runtime: sherpa.wasm copied');
 
+// GitHub Pages rejects files over 100 MB, so catalog "parts" files are served in pieces
+// (name.part0, name.part1, ...) that the app joins back together while downloading
+function partPaths(model, dir, f) {
+  const n = model.parts?.[f];
+  return n ? Array.from({ length: n }, (_, i) => join(dir, `${f}.part${i}`)) : [join(dir, f)];
+}
+
+function splitFile(path, parts) {
+  const data = readFileSync(path);
+  const size = Math.ceil(data.length / parts.length);
+  parts.forEach((p, i) => writeFileSync(p, data.subarray(i * size, (i + 1) * size)));
+  rmSync(path);
+}
+
 for (const model of catalog.models) {
   const dir = join(outRoot, model.dir);
-  const missing = model.files.filter((f) => !existsSync(join(dir, f)));
+  // A whole copy of a split file (from before it was split) only needs splitting
+  for (const f of Object.keys(model.parts ?? {})) {
+    if (existsSync(join(dir, f))) splitFile(join(dir, f), partPaths(model, dir, f));
+  }
+  const missing = model.files.filter((f) => !partPaths(model, dir, f).every((p) => existsSync(p)));
   if (missing.length === 0) {
     console.log(`${model.id}: up to date`);
     continue;
@@ -58,6 +76,7 @@ for (const model of catalog.models) {
       for (const f of missing) {
         mkdirSync(dirname(join(dir, f)), { recursive: true });
         copyFileSync(join(work, model.source.root, f), join(dir, f));
+        if (model.parts?.[f]) splitFile(join(dir, f), partPaths(model, dir, f));
       }
     } finally {
       rmSync(work, { recursive: true, force: true });
