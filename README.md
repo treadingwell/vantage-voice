@@ -90,14 +90,6 @@ npm run preview
 ```
 
 ### 5. Offline Speech Models
-Narrators (opt-in downloads in Settings; all run on one CPU thread via sherpa-onnx WASM):
-
-| Narrator | Download | Desktop speed |
-|---|---|---|
-| Supertonic 2 (int8, 4 steps) | 94 MB | ~4x faster than real time |
-| Kitten Nano 0.8 (int8) | 28 MB | ~2x faster than real time |
-| Kokoro v1.0 (int8, English voices + US lexicon) | 143 MB | ~1.4x slower than real time |
-
 The sherpa-onnx models (narrators and Kroko recognition) are served from `public/models/`, which is
 gitignored. Fetch them before previewing locally; `npm run deploy` does this automatically:
 ```bash

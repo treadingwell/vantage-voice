@@ -135,25 +135,6 @@ describe('SpeechService (Dual-Engine STT + Local TTS)', () => {
     });
   });
 
-  describe('Neural voice selection', () => {
-    beforeEach(() => {
-      localStorage.removeItem('vantage_tts_voice_kokoro-v1');
-      localStorage.removeItem('vantage_tts_voice_kitten-nano');
-    });
-
-    it("defaults to each model's recommended voice (Kokoro: Heart)", () => {
-      expect(service.getNeuralVoice('kokoro-v1')).toBe(3);
-      expect(service.getNeuralVoice('kitten-nano')).toBe(0);
-    });
-
-    it('keeps a saved voice, including voice 0', () => {
-      service.setNeuralVoice('kokoro-v1', 0);
-      expect(service.getNeuralVoice('kokoro-v1')).toBe(0);
-      service.setNeuralVoice('kokoro-v1', 21);
-      expect(service.getNeuralVoice('kokoro-v1')).toBe(21);
-    });
-  });
-
   describe('Speak Execution', () => {
     it('resolves immediately when muted without calling speechSynthesis', async () => {
       service.setMuted(true);

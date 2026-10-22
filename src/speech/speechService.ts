@@ -7,7 +7,7 @@ import { normalizeForSpeech } from './ttsFormatter';
 export type SttEngineMode = 'web-speech' | 'offline-wasm' | 'sherpa';
 
 /** 'native' is the device's speechSynthesis; the others are sherpa model ids. */
-export type TtsEngineMode = 'native' | 'kitten-nano' | 'supertonic-2' | 'kokoro-v1';
+export type TtsEngineMode = 'native' | 'kitten-nano' | 'supertonic-2';
 
 export const SHERPA_STT_MODEL_ID = 'kroko-en';
 
@@ -51,7 +51,7 @@ const SENTENCE_PAUSE_STORAGE_KEY = 'vantage_sentence_pause_ms';
 export const DEFAULT_SENTENCE_PAUSE_MS = 250;
 
 const STT_ENGINES: SttEngineMode[] = ['web-speech', 'offline-wasm', 'sherpa'];
-const TTS_ENGINES: TtsEngineMode[] = ['native', 'kitten-nano', 'supertonic-2', 'kokoro-v1'];
+const TTS_ENGINES: TtsEngineMode[] = ['native', 'kitten-nano', 'supertonic-2'];
 
 /** 'en' matches every English locale; 'all' disables filtering. */
 export const DEFAULT_VOICE_LANGUAGE = 'en';
@@ -801,11 +801,8 @@ export class SpeechService {
   }
 
   public getNeuralVoice(mode: TtsEngineMode): number {
-    const raw = loadPref(NEURAL_VOICE_STORAGE_PREFIX + mode);
-    const saved = raw === null ? NaN : Number(raw);
-    if (Number.isInteger(saved) && saved >= 0) return saved;
-    // The catalog lists each model's recommended voice first
-    return getModel(mode)?.voices?.[0]?.sid ?? 0;
+    const saved = Number(loadPref(NEURAL_VOICE_STORAGE_PREFIX + mode));
+    return Number.isInteger(saved) && saved >= 0 ? saved : 0;
   }
 
   public setNeuralVoice(mode: TtsEngineMode, sid: number): void {
