@@ -833,6 +833,14 @@ export class VoiceController {
     }
   }
 
+  /** Opens game setup (Card 000); Card 001 (escape pods) is linked from there. */
+  public async openGameSetup(): Promise<void> {
+    const entry = this.db.getByKey('s0') || this.db.getByBookAndNumber('s', 0);
+    if (entry) {
+      await this.executeLookup(entry, 0);
+    }
+  }
+
   public backToLookup(): void {
     this.handleCancel();
   }

@@ -1845,69 +1845,6 @@ span.card-num {
    Game Setup (Cards 000 & 001) & Enhanced Repeat Styling
    ========================================================================== */
 
-.game-setup-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: linear-gradient(135deg, rgba(30, 58, 138, 0.45) 0%, rgba(16, 185, 129, 0.2) 100%);
-  border: 1px solid rgba(0, 210, 255, 0.4);
-  border-radius: 12px;
-  padding: 8px 12px;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.setup-bar-header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: var(--accent-cyan);
-}
-
-.setup-rocket-icon {
-  font-size: 1.1rem;
-}
-
-.setup-bar-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.btn-setup-quick {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--bg-surface-elevated);
-  border: 1px solid var(--border-strong);
-  color: var(--text-main);
-  padding: 5px 10px;
-  border-radius: 8px;
-  font-size: 0.82rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-setup-quick:hover, .btn-setup-quick:active {
-  background: var(--accent-cyan);
-  color: #0b131e;
-  border-color: var(--accent-cyan);
-  box-shadow: 0 0 10px var(--accent-cyan-glow);
-}
-
-.setup-quick-badge {
-  background: rgba(0, 0, 0, 0.4);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-family: var(--font-family-mono);
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: var(--accent-amber);
-}
-
 .setup-nav-banner {
   margin: 12px 0;
   padding: 12px;
@@ -2177,23 +2114,6 @@ span.card-num {
     flex: 1 1 100%;
   }
 
-  .game-setup-bar {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 8px;
-  }
-
-  .setup-bar-actions {
-    flex-wrap: wrap;
-    width: 100%;
-    justify-content: stretch;
-  }
-
-  .btn-setup-quick {
-    flex: 1;
-    justify-content: center;
-  }
-
   .pods-nav-buttons {
     grid-template-columns: repeat(2, 1fr);
     gap: 6px;
@@ -2432,4 +2352,224 @@ span.card-num {
 
 .dock-narrator-btn {
   white-space: nowrap;
+}
+
+/* ==========================================================================
+   Lookup screen fits one phone screen: the card fills the space between the
+   header and the voice dock, the number pad takes whatever height is left,
+   and the action preview has a fixed-height slot so nothing shifts while typing.
+   ========================================================================== */
+#app {
+  padding-bottom: calc(var(--dock-height) + var(--safe-bottom) + 8px);
+}
+
+.main-content {
+  padding: 10px 12px 4px;
+}
+
+.lookup-pad-container {
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.lookup-pad-card {
+  flex: 1;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 18px;
+}
+
+.display-bar {
+  padding: 6px 12px;
+}
+
+/* Fixed slot: always present, three compact chip rows tall (enough for every book on one
+   number), scrolls inside if needed. Top-aligned so overflow stays scrollable. */
+.action-previews,
+.action-previews.has-previews {
+  display: flex;
+  align-items: flex-start;
+  height: 86px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.action-previews::-webkit-scrollbar {
+  display: none;
+}
+
+.preview-chips-container {
+  width: 100%;
+}
+
+.preview-chips-scroll {
+  gap: 5px;
+  padding-bottom: 0;
+}
+
+.preview-chip {
+  /* 25px tall: three rows (85px) fit the slot */
+  padding: 3px 8px;
+  font-size: 0.74rem;
+  line-height: 1.2;
+  gap: 5px;
+}
+
+.preview-single-action {
+  width: 100%;
+}
+
+.preview-hint {
+  width: 100%;
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+/* Compact storybook tiles */
+.storybook-grid {
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.book-btn {
+  padding: 6px 2px;
+  gap: 3px;
+}
+
+.book-btn-icon,
+.book-svg-icon {
+  width: 30px;
+  height: 30px;
+}
+
+/* Number pad stretches to fill the remaining height */
+.numpad-grid {
+  flex: 1;
+  min-height: 0;
+  gap: 8px;
+  grid-template-rows: repeat(4, minmax(44px, 1fr));
+  max-height: 340px;
+}
+
+.numpad-btn {
+  height: auto;
+  min-height: 44px;
+}
+
+/* Shorter phones (iPhone SE, many Androids): tighten everything above the number pad */
+@media (max-height: 780px) {
+  .header-subtitle {
+    display: none;
+  }
+
+  .header-container {
+    padding: 6px 16px;
+  }
+
+  .main-content {
+    padding: 6px 10px 2px;
+  }
+
+  .lookup-pad-card {
+    gap: 6px;
+    padding: 10px;
+  }
+
+  .book-btn {
+    padding: 4px 2px;
+  }
+
+  .book-btn-icon,
+  .book-svg-icon {
+    width: 24px;
+    height: 24px;
+  }
+
+  .numpad-grid {
+    gap: 6px;
+  }
+
+  .numpad-btn {
+    font-size: 1.35rem;
+  }
+}
+
+/* Centre the hint vertically inside the top-aligned preview slot */
+.action-previews:not(.has-previews) {
+  align-items: center;
+}
+
+/* Narrow phones: keep the header on one line so it doesn't eat keypad height */
+@media (max-width: 420px) {
+  .header-subtitle {
+    display: none;
+  }
+
+  .header-title {
+    font-size: 1rem;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+  }
+
+  .header-logo-group {
+    gap: 8px;
+  }
+
+  .header-logo-img {
+    height: 32px;
+  }
+
+  .header-actions {
+    gap: 6px;
+  }
+
+  .header-btn {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+/* Very short phones (iPhone SE and similar): icon-only book tiles and smaller chips so
+   the whole keypad still fits without scrolling */
+@media (max-height: 700px) {
+  .book-btn-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .book-btn {
+    padding: 6px 2px;
+  }
+
+  .book-btn-icon,
+  .book-svg-icon {
+    width: 30px;
+    height: 30px;
+  }
+
+  .preview-chips-scroll {
+    gap: 4px;
+  }
+
+  .preview-chip {
+    padding: 2px 6px;
+    font-size: 0.66rem;
+    gap: 4px;
+  }
+
+  .preview-chip-icon {
+    width: 13px;
+    height: 13px;
+  }
+
+  .action-previews,
+  .action-previews.has-previews {
+    height: 48px;
+  }
 }
