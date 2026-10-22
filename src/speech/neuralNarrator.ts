@@ -157,16 +157,33 @@ export class NeuralNarrator {
   private play(ctx: AudioContext, audio: GeneratedSpeech): Promise<void> {
     return new Promise((resolve) => {
       const samples = new Float32Array(audio.samples);
-      let peak = 0;
+      // Normalize chunk volume using Speech RMS so every reading (both Kitten and Supertonic,
+      // options prompts, dice prompts, and story results) plays at the exact same, balanced loudness.
+      let sumSq = 0;
+      let nonSilent = 0;
       for (let i = 0; i < samples.length; i++) {
         const abs = Math.abs(samples[i]);
-        if (abs > peak) peak = abs;
+        if (abs > 0.01) {
+          sumSq += abs * abs;
+          nonSilent++;
+        }
       }
-      // Normalize chunk volume so every reading (both Kitten and Supertonic, options & prompts)
-      // plays at a consistent, confident listening volume
-      if (peak > 0.005) {
-        const targetPeak = 0.90;
-        const gain = Math.min(targetPeak / peak, 5.0);
+      const speechRms = nonSilent > 0 ? Math.sqrt(sumSq / nonSilent) : 0;
+      if (speechRms > 0.005) {
+        // Target 0.12 speech RMS: standard, comfortable listening level matching natural Kitten delivery
+        const targetRms = 0.12;
+        let gain = Math.min(targetRms / speechRms, 2.5);
+
+        // Guard against peak clipping
+        let maxPeak = 0;
+        for (let i = 0; i < samples.length; i++) {
+          const p = Math.abs(samples[i]) * gain;
+          if (p > maxPeak) maxPeak = p;
+        }
+        if (maxPeak > 0.92) {
+          gain *= 0.92 / maxPeak;
+        }
+
         if (Math.abs(gain - 1.0) > 0.01) {
           for (let i = 0; i < samples.length; i++) {
             samples[i] *= gain;

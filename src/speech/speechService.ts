@@ -468,6 +468,12 @@ export class SpeechService {
    * (including a safety timeout fallback in case mobile browser onend doesn't fire).
    */
   public speak(text: string, options?: SpeakOptions): Promise<void> {
+    if (typeof navigator !== 'undefined' && 'audioSession' in navigator) {
+      try {
+        (navigator as unknown as { audioSession?: { type: string } }).audioSession!.type = 'playback';
+      } catch {}
+    }
+
     // Cancel any ongoing speech
     this.stopSpeaking();
 
@@ -1055,6 +1061,12 @@ export class SpeechService {
     this.continuousListening = continuous;
     this.temporarilyPausedForSpeech = false;
 
+    if (typeof navigator !== 'undefined' && 'audioSession' in navigator) {
+      try {
+        (navigator as unknown as { audioSession?: { type: string } }).audioSession!.type = 'play-and-record';
+      } catch {}
+    }
+
     await this.unlockAudio();
 
     if (this.currentEngine === 'offline-wasm') {
@@ -1077,6 +1089,12 @@ export class SpeechService {
     this.isListeningDesired = false;
     this.continuousListening = false;
     this.temporarilyPausedForSpeech = false;
+
+    if (typeof navigator !== 'undefined' && 'audioSession' in navigator) {
+      try {
+        (navigator as unknown as { audioSession?: { type: string } }).audioSession!.type = 'playback';
+      } catch {}
+    }
 
     if (this.webSpeechRestartTimer) {
       clearTimeout(this.webSpeechRestartTimer);
@@ -1445,11 +1463,19 @@ export class SpeechService {
   }
 
   // -------------------------------------------------------------------------
-  // STT / TTS Coordination (Acoustic Echo Avoidance)
+  // STT / TTS Coordination (Acoustic Echo & Hardware Ducking Avoidance)
   // -------------------------------------------------------------------------
 
   private pauseListeningForSpeech(): void {
     this.temporarilyPausedForSpeech = true;
+
+    // Signal OS to exit communication mode and restore media playback priority
+    if (typeof navigator !== 'undefined' && 'audioSession' in navigator) {
+      try {
+        (navigator as unknown as { audioSession?: { type: string } }).audioSession!.type = 'playback';
+      } catch {}
+    }
+
     if (this.currentEngine === 'web-speech') {
       // abort() releases the mic immediately; stop() waits to finalize, and while the
       // recording session is open iOS ducks or stalls TTS output
@@ -1457,34 +1483,30 @@ export class SpeechService {
         try {
           this.webSpeechRecognition.abort();
         } catch {}
+        this.webSpeechRecognition = null;
       }
-    }
-    // Mute mic tracks during speech to prevent OS audio ducking on mobile devices
-    if (this.mediaStream) {
-      try {
-        this.mediaStream.getAudioTracks().forEach((track) => {
-          track.enabled = false;
-        });
-      } catch {}
+    } else {
+      // Fully stop microphone capture and release hardware tracks during speech
+      // so mobile OS exits VoIP communication mode and restores full speaker loudness
+      this.stopMicCapture();
     }
   }
 
-  private resumeListeningAfterSpeech(): void {
+  private async resumeListeningAfterSpeech(): Promise<void> {
     this.temporarilyPausedForSpeech = false;
-    // Unmute mic tracks once speech output has completed
-    if (this.mediaStream) {
-      try {
-        this.mediaStream.getAudioTracks().forEach((track) => {
-          track.enabled = true;
-        });
-      } catch {}
-    }
     if (this.isListeningDesired && !this.isSpeakingState) {
+      if (typeof navigator !== 'undefined' && 'audioSession' in navigator) {
+        try {
+          (navigator as unknown as { audioSession?: { type: string } }).audioSession!.type = 'play-and-record';
+        } catch {}
+      }
+
       if (this.currentEngine === 'web-speech') {
         this.startWebSpeech();
+      } else if (this.currentEngine === 'offline-wasm') {
+        await this.startOfflineVosk();
       } else if (this.currentEngine === 'sherpa') {
-        // Drop any half-heard words from before the prompt
-        this.sherpa?.resetAsr();
+        await this.startSherpaStt();
       }
     }
   }
