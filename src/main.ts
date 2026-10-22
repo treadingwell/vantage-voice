@@ -7,6 +7,10 @@ import { LookupPad } from './ui/lookupPad';
 import { StoryView } from './ui/storyView';
 import { VoiceDock } from './ui/voiceDock';
 import { SettingsModal } from './ui/settingsModal';
+import { initInstallPrompt } from './ui/installPrompt';
+
+// Before anything async: Chrome can fire its install event as soon as the page loads
+initInstallPrompt();
 
 async function bootstrapApp(): Promise<void> {
   // 1. Ensure Rulepop SVG sprites are injected into the DOM

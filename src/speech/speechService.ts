@@ -269,6 +269,9 @@ export class SpeechService {
   public async unlockAudio(): Promise<boolean> {
     if (this.isAudioUnlocked) return true;
 
+    // Before any audio starts: iOS mutes Web Audio in Silent mode unless the session is "playback"
+    setAudioSessionType('playback');
+
     try {
       if (typeof window !== 'undefined') {
         const ctx = this.getPlaybackAudioContext();

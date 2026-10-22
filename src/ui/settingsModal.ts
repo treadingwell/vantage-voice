@@ -7,6 +7,14 @@ import {
   SHERPA_RUNTIME,
 } from '../speech/models/modelStore';
 import { VoiceController } from './voiceController';
+import {
+  canPromptInstall,
+  detectPlatform,
+  InstallPlatform,
+  isRunningInstalled,
+  onInstallStateChange,
+  promptInstall,
+} from './installPrompt';
 
 /** Downloadable models shown in settings: the Vosk pack plus the sherpa catalog entries. */
 type ModelKey = 'vosk' | 'kroko-en' | 'kitten-nano' | 'supertonic-2' | 'supertonic-3';
@@ -95,6 +103,50 @@ export function voiceTestText(rate: number, pauseMs: number, neural: boolean): s
   ].join(' ');
 }
 
+const SPEAKER_ICON = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+  <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+</svg>`;
+const STOP_ICON = `<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+  <rect x="6" y="6" width="12" height="12" rx="1"></rect>
+</svg>`;
+
+const INSTALL_STEPS: Record<Exclude<InstallPlatform, 'other'>, { title: string; steps: string[] }> = {
+  ios: {
+    title: 'iPhone & iPad (Safari)',
+    steps: [
+      'Tap the <strong>Share</strong> button (square with an arrow). On iOS 26, tap <strong>•••</strong> in the bottom bar first.',
+      'Scroll down and tap <strong>Add to Home Screen</strong>.',
+      'Leave <strong>Open as Web App</strong> on, then tap <strong>Add</strong>.',
+    ],
+  },
+  android: {
+    title: 'Android (Chrome)',
+    steps: [
+      'Tap the <strong>⋮</strong> menu at the top right.',
+      'Tap <strong>Install app</strong> (or <strong>Add to Home screen</strong>).',
+      'Tap <strong>Install</strong>.',
+    ],
+  },
+};
+
+const SOUND_TIPS: Record<InstallPlatform, string[]> = {
+  ios: [
+    'Turn off <strong>Silent mode</strong>: flip the switch on the side of the phone (orange means silent), or on newer iPhones use the Action button or the bell in Control Center.',
+    'Turn the volume up <strong>while the narrator is speaking</strong>, so you raise media volume, not the ringer.',
+  ],
+  android: [
+    'Turn the volume up <strong>while the narrator is speaking</strong>, so you raise media volume, not the ringtone.',
+    "Check that Do Not Disturb isn't muting media.",
+  ],
+  other: ["Check your device volume and that the browser tab isn't muted."],
+};
+const COMMON_SOUND_TIPS = [
+  "Make sure the speaker icon at the top isn't muted (red).",
+  'Check whether Bluetooth headphones or a speaker are connected.',
+  'Tap anywhere in the app once: browsers block sound until you interact with the page.',
+];
+
 export class SettingsModal {
   private container: HTMLElement;
   private controller: VoiceController;
@@ -113,6 +165,10 @@ export class SettingsModal {
   private errorMessage = '';
   private busyMessage = '';
   private storageUsedMB: number | null = null;
+  private testPlaying = false;
+  // Help panels the user expanded, kept across re-renders
+  private openHelp = new Set<string>();
+  private unsubInstall: (() => void) | null = null;
 
   constructor(container: HTMLElement, controller: VoiceController) {
     this.container = container;
@@ -125,6 +181,10 @@ export class SettingsModal {
       }
     });
 
+    this.unsubInstall = onInstallStateChange(() => {
+      if (this.isOpen) this.render();
+    });
+
     this.render();
   }
 
@@ -133,6 +193,8 @@ export class SettingsModal {
       this.unsubController();
       this.unsubController = null;
     }
+    this.unsubInstall?.();
+    this.unsubInstall = null;
   }
 
   public open(): void {
@@ -144,6 +206,7 @@ export class SettingsModal {
   }
 
   public close(): void {
+    if (this.testPlaying) this.speech.stopSpeaking();
     this.isOpen = false;
     this.container.classList.remove('is-open');
   }
@@ -197,6 +260,8 @@ export class SettingsModal {
     const currentRate = this.speech.getSpeechRate();
     const ttsEngine = this.speech.getTtsEngine();
     const pauseMs = this.speech.getSentencePauseMs();
+    // Re-rendering replaces the scrolling panel; keep the reader where they were
+    const scrollTop = this.container.querySelector('.modal-body')?.scrollTop ?? 0;
 
     this.container.innerHTML = `
       <div class="modal-backdrop" id="modal-backdrop"></div>
@@ -245,13 +310,11 @@ export class SettingsModal {
 
             ${ttsEngine === 'native' ? this.renderNativeVoiceControls() : this.renderNeuralVoiceControls(ttsEngine, pauseMs)}
 
-            <button type="button" class="btn-test-voice" id="btn-test-voice">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-                <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-              </svg>
-              <span>Test Voice & Speed</span>
+            <button type="button" class="btn-test-voice ${this.testPlaying ? 'is-playing' : ''}" id="btn-test-voice">
+              ${this.testPlaying ? STOP_ICON : SPEAKER_ICON}
+              <span>${this.testPlaying ? 'Stop Test' : 'Test Voice & Speed'}</span>
             </button>
+            <p class="settings-hint">No sound? Check Silent mode and media volume (see <em>Can't hear the narrator?</em> below).</p>
           </section>
 
           <!-- Speech Recognition (STT) -->
@@ -277,6 +340,8 @@ export class SettingsModal {
             </div>
           </section>
 
+          ${this.renderHelp()}
+
           <p class="storage-note">
             Offline models work in Airplane Mode once downloaded. Sherpa models share a
             ${SHERPA_RUNTIME.approxMB} MB speech engine.
@@ -286,7 +351,44 @@ export class SettingsModal {
       </div>
     `;
 
+    const body = this.container.querySelector('.modal-body');
+    if (body) body.scrollTop = scrollTop;
     this.bindEvents();
+  }
+
+  private renderHelp(): string {
+    const platform = detectPlatform();
+    // Show the reader's own platform first
+    const order: Array<keyof typeof INSTALL_STEPS> = platform === 'android' ? ['android', 'ios'] : ['ios', 'android'];
+    const installBody = isRunningInstalled()
+      ? "<p class=\"help-status\">✓ You're using the installed app.</p>"
+      : `
+        ${canPromptInstall() ? '<button type="button" class="btn-install-app" id="btn-install-app">Install Vantage Voice</button>' : ''}
+        ${order
+          .map(
+            (key) => `
+          <div class="help-steps">
+            <h4>${INSTALL_STEPS[key].title}</h4>
+            <ol>${INSTALL_STEPS[key].steps.map((step) => `<li>${step}</li>`).join('')}</ol>
+          </div>`
+          )
+          .join('')}
+        <p class="help-note">Open it from your home screen. Download narrators while online; after that it works in Airplane Mode.</p>`;
+
+    const tips = [...SOUND_TIPS[platform], ...COMMON_SOUND_TIPS];
+    return `
+      <section class="settings-section help-section">
+        <h3 class="section-heading">Help</h3>
+        <details class="help-card" data-help="install" ${this.openHelp.has('install') ? 'open' : ''}>
+          <summary>Install as an app</summary>
+          ${installBody}
+        </details>
+        <details class="help-card" data-help="sound" ${this.openHelp.has('sound') ? 'open' : ''}>
+          <summary>Can't hear the narrator?</summary>
+          <ul>${tips.map((tip) => `<li>${tip}</li>`).join('')}</ul>
+        </details>
+      </section>
+    `;
   }
 
   private renderEngineOption<T extends string>(name: string, option: EngineOption<T>, selected: T): string {
@@ -522,17 +624,42 @@ export class SettingsModal {
       }
     });
 
-    // Test Voice
+    // Test Voice: the same button stops a test that is playing
     const testVoiceBtn = this.container.querySelector('#btn-test-voice');
     testVoiceBtn?.addEventListener('click', async () => {
-      await this.speech.unlockAudio();
-      await this.speech.speak(
-        voiceTestText(
-          this.speech.getSpeechRate(),
-          this.speech.getSentencePauseMs(),
-          this.speech.isTtsEngineActive()
-        )
-      );
+      if (this.testPlaying) {
+        this.speech.stopSpeaking();
+        return;
+      }
+      this.testPlaying = true;
+      this.render();
+      try {
+        await this.speech.unlockAudio();
+        await this.speech.speak(
+          voiceTestText(
+            this.speech.getSpeechRate(),
+            this.speech.getSentencePauseMs(),
+            this.speech.isTtsEngineActive()
+          )
+        );
+      } finally {
+        this.testPlaying = false;
+        if (this.isOpen) this.render();
+      }
+    });
+
+    // Help panels
+    this.container.querySelectorAll<HTMLDetailsElement>('details[data-help]').forEach((el) => {
+      el.addEventListener('toggle', () => {
+        const key = el.dataset.help!;
+        if (el.open) this.openHelp.add(key);
+        else this.openHelp.delete(key);
+      });
+    });
+
+    const installBtn = this.container.querySelector('#btn-install-app');
+    installBtn?.addEventListener('click', () => {
+      void promptInstall();
     });
   }
 
