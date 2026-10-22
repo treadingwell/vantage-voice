@@ -564,6 +564,8 @@ export class VoiceController {
     source: InputSource = 'tap'
   ): Promise<void> {
     await this.unlockAudio();
+    this.speech.stopSpeaking();
+    this.speech.stopListening();
     this.voiceFlow = source === 'voice';
 
     this.state.activeResult = result;
@@ -610,6 +612,8 @@ export class VoiceController {
     variantIndex: number
   ): Promise<void> {
     await this.unlockAudio();
+    this.speech.stopSpeaking();
+    this.speech.stopListening();
 
     this.state.activeResult = result;
     this.state.activeVariantIndex = variantIndex;
@@ -693,6 +697,7 @@ export class VoiceController {
     // Step 5: Check Branching Choices
     if (parsed.hasChoices && parsed.choices.length > 0) {
       this.setMode('BRANCHING_CHOICE');
+      this.speech.stopListening();
       const branchPrompt = formatBranchChoicesPrompt(parsed.choices);
       this.notify();
       await this.speech.speak(branchPrompt);

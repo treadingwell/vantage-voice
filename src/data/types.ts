@@ -44,7 +44,7 @@ export interface StoryRawVariant {
   option?: string;
   direction?: string;
   region?: string;
-  cost?: number;
+  cost?: number | string;
   action?: string;
   result?: string;
   obscure?: boolean;
@@ -57,7 +57,7 @@ export interface StoryEntryVariant {
   option: string | null;
   direction: string | null;
   region: string | null;
-  cost: number | null;
+  cost: number | string | null;
   actionHtml: string;
   actionPlain: string;
   primaryVerb: string | null;

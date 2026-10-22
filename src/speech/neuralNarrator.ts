@@ -82,6 +82,8 @@ export class NeuralNarrator {
   private getAudioContext: () => AudioContext | null;
   private generation = 0;
   private activeSource: AudioBufferSourceNode | null = null;
+  private compressorNode: DynamicsCompressorNode | null = null;
+  private masterGainNode: GainNode | null = null;
   private wake: (() => void) | null = null;
 
   constructor(client: SherpaClient, getAudioContext: () => AudioContext | null) {
@@ -139,13 +141,56 @@ export class NeuralNarrator {
     this.wake = null;
   }
 
+  private getAudioChain(ctx: AudioContext): AudioNode {
+    if (!this.compressorNode || (this.compressorNode as unknown as { context?: AudioContext }).context !== ctx) {
+      try {
+        const compressor = ctx.createDynamicsCompressor();
+        compressor.threshold.value = -20;
+        compressor.knee.value = 20;
+        compressor.ratio.value = 8;
+        compressor.attack.value = 0.003;
+        compressor.release.value = 0.25;
+
+        const gain = ctx.createGain();
+        gain.gain.value = 1.0;
+
+        compressor.connect(gain);
+        gain.connect(ctx.destination);
+
+        this.compressorNode = compressor;
+        this.masterGainNode = gain;
+      } catch {
+        return ctx.destination;
+      }
+    }
+    return this.compressorNode ?? ctx.destination;
+  }
+
   private play(ctx: AudioContext, audio: GeneratedSpeech): Promise<void> {
     return new Promise((resolve) => {
-      const buffer = ctx.createBuffer(1, audio.samples.length, audio.sampleRate);
-      buffer.copyToChannel(audio.samples as Float32Array<ArrayBuffer>, 0);
+      const samples = new Float32Array(audio.samples);
+      let peak = 0;
+      for (let i = 0; i < samples.length; i++) {
+        const abs = Math.abs(samples[i]);
+        if (abs > peak) peak = abs;
+      }
+      // Normalize chunk volume so every reading (especially options & short prompts) has consistent loudness
+      if (peak > 0.005) {
+        const targetPeak = 0.92;
+        const gain = Math.min(targetPeak / peak, 5.0);
+        if (Math.abs(gain - 1.0) > 0.01) {
+          for (let i = 0; i < samples.length; i++) {
+            samples[i] *= gain;
+          }
+        }
+      }
+
+      const buffer = ctx.createBuffer(1, samples.length, audio.sampleRate);
+      buffer.copyToChannel(samples, 0);
       const source = ctx.createBufferSource();
       source.buffer = buffer;
-      source.connect(ctx.destination);
+      const target = this.getAudioChain(ctx);
+      source.connect(target);
       const done = () => {
         if (this.activeSource === source) this.activeSource = null;
         if (this.wake === done) this.wake = null;

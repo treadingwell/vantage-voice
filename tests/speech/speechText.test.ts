@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeForSpeech, numberToWords } from '../../src/speech/ttsFormatter';
+import {
+  normalizeForSpeech,
+  numberToWords,
+  formatActionPromptForSpeech,
+  htmlToSpeechText,
+} from '../../src/speech/ttsFormatter';
 import { splitIntoSentences } from '../../src/speech/neuralNarrator';
 
 describe('numberToWords', () => {
@@ -113,6 +118,45 @@ describe('parenthetical pauses', () => {
       )
     ).toBe(
       'the sentient highlights your current location; view page nine in the Book of Vantages; you are in region L.'
+    );
+  });
+});
+
+describe('X dice marker formatting', () => {
+  it('formats action prompts with X dice marker as "Roll any number of dice;"', () => {
+    // Cost is 'X'
+    const promptWithAction = formatActionPromptForSpeech({
+      cost: 'X',
+      actionPlain: 'COMMUNE with the cave',
+    } as any);
+    expect(promptWithAction).toBe('Roll any number of dice; commune with the cave.');
+
+    // Cost is 'x' lowercase
+    const promptLower = formatActionPromptForSpeech({
+      cost: 'x',
+      actionPlain: 'GATHER intel',
+    } as any);
+    expect(promptLower).toBe('Roll any number of dice; gather intel.');
+
+    // Cost is 'X' with empty action
+    const promptEmpty = formatActionPromptForSpeech({
+      cost: 'X',
+      actionPlain: '',
+    } as any);
+    expect(promptEmpty).toBe('Roll any number of dice;');
+
+    // Inline SVG with cost-x in summary or text
+    const speechFromSvg = htmlToSpeechText(
+      "<summary><svg class='◊' viewBox='0 0 500 500'><use href='#i-cost-x' /></svg> <span class='move action'>ENTER</span></summary>"
+    );
+    expect(speechFromSvg).toContain('Roll any number of dice;');
+    expect(speechFromSvg).toContain('ENTER');
+  });
+
+  it('normalizes option prompts to keep speech volume consistent across engines', () => {
+    expect(normalizeForSpeech('Option 1: Let them live.')).toBe('Option one. Let them live.');
+    expect(normalizeForSpeech('Multiple options for Depart forty three: East or North. Which one?')).toBe(
+      'Multiple options for Depart forty three. East or North. Which one?'
     );
   });
 });

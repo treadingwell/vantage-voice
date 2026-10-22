@@ -124,7 +124,7 @@ export class StoryView {
                       ${dirIco ? `<span class="pill-dir-icon">${dirIco}</span>` : ''}
                       <span class="pill-option-name">${optLabel}</span>
                       ${verb ? `<span class="pill-verb">${verb}</span>` : ''}
-                      ${v.cost !== null && v.cost > 0 ? `<span class="pill-cost">${v.cost}🎲</span>` : ''}
+                      ${v.cost !== null && v.cost !== undefined && String(v.cost) !== "0" ? `<span class="pill-cost">${v.cost}🎲</span>` : ''}
                     </button>
                   `;
                 })
@@ -232,12 +232,22 @@ export class StoryView {
     this.bindEvents();
   }
 
-  private renderCostBadge(cost: number | null): string {
-    if (cost === null || cost === undefined || cost <= 0) {
+  private renderCostBadge(cost: number | string | null): string {
+    if (cost === null || cost === undefined || cost === 0 || String(cost) === "0") {
       return `<div class="cost-hex-badge cost-zero" title="No dice roll required"><span>Free</span></div>`;
     }
 
-    if (cost >= 1 && cost <= 10) {
+    const costStr = String(cost).trim().toUpperCase();
+    if (costStr === "X") {
+      return `
+        <div class="cost-svg-wrapper" title="Roll any number of dice">
+          ${renderIconSvg("i-cost-x", "dice-cost-svg")}
+        </div>
+      `;
+    }
+
+    const numericCost = typeof cost === "number" ? cost : parseInt(String(cost), 10);
+    if (!isNaN(numericCost) && numericCost >= 1 && numericCost <= 10) {
       return `
         <div class="cost-svg-wrapper" title="Roll ${cost} dice challenge">
           ${renderIconSvg(`i-cost-${cost}`, 'dice-cost-svg')}

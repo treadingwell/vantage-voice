@@ -166,7 +166,16 @@ export class StoryDatabase {
           option: raw.option ?? null,
           direction: raw.direction ?? null,
           region: raw.region ?? null,
-          cost: raw.cost !== undefined ? raw.cost : null,
+          cost:
+            raw.cost !== undefined && raw.cost !== null
+              ? typeof raw.cost === 'string' && raw.cost.trim().toUpperCase() === 'X'
+                ? 'X'
+                : typeof raw.cost === 'number'
+                ? raw.cost
+                : !isNaN(parseInt(String(raw.cost), 10))
+                ? parseInt(String(raw.cost), 10)
+                : raw.cost
+              : null,
           actionHtml,
           actionPlain,
           primaryVerb: primary,

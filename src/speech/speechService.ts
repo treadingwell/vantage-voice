@@ -249,10 +249,10 @@ export class SpeechService {
           source.start(0);
         }
 
-        // Trigger zero-volume empty SpeechSynthesis utterance
+        // Trigger quick empty SpeechSynthesis utterance to unlock audio pipeline
         if ('speechSynthesis' in window) {
-          const silentUtterance = new SpeechSynthesisUtterance('');
-          silentUtterance.volume = 0;
+          const silentUtterance = new SpeechSynthesisUtterance(' ');
+          silentUtterance.volume = 1.0;
           silentUtterance.rate = 1.0;
           window.speechSynthesis.speak(silentUtterance);
           if (window.speechSynthesis.paused) {
@@ -1437,12 +1437,26 @@ export class SpeechService {
         } catch {}
       }
     }
-    // For offline-wasm, ScriptProcessor drops incoming audio frames while
-    // this.temporarilyPausedForSpeech is true, keeping audio pipe warm without echo.
+    // Mute mic tracks during speech to prevent OS audio ducking on mobile devices
+    if (this.mediaStream) {
+      try {
+        this.mediaStream.getAudioTracks().forEach((track) => {
+          track.enabled = false;
+        });
+      } catch {}
+    }
   }
 
   private resumeListeningAfterSpeech(): void {
     this.temporarilyPausedForSpeech = false;
+    // Unmute mic tracks once speech output has completed
+    if (this.mediaStream) {
+      try {
+        this.mediaStream.getAudioTracks().forEach((track) => {
+          track.enabled = true;
+        });
+      } catch {}
+    }
     if (this.isListeningDesired && !this.isSpeakingState) {
       if (this.currentEngine === 'web-speech') {
         this.startWebSpeech();

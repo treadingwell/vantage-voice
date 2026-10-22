@@ -413,7 +413,7 @@ export class LookupPad {
               ${renderIconSvg(BOOK_BY_PREFIX[exactMatch.prefix].iconId, 'preview-icon')}
               <span class="preview-book-name">${exactMatch.bookName.toUpperCase()} ${exactMatch.paddedNumber}:</span>
               <span class="preview-verb">${verb}</span>
-              ${v?.cost !== null && v?.cost > 0 ? `<span class="preview-cost">[Cost: ${v.cost}]</span>` : ''}
+              ${v?.cost !== null && v?.cost !== undefined && String(v.cost) !== "0" ? `<span class="preview-cost">[Cost: ${v.cost}]</span>` : ''}
             </div>
           `;
         } else {

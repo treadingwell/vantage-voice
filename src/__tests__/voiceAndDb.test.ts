@@ -238,6 +238,15 @@ describe('Vantage Data Layer, TTS Formatter & Voice NLP Parser', () => {
       const prompt = formatBranchChoicesPrompt(parsed.choices);
       expect(prompt).toBe('Option 1: Let them live. Option 2: Finish them. Which do you choose?');
     });
+
+    it('handles entries with X dice marker and formats with "Roll any number of dice;"', () => {
+      const e20 = db.getByKey('e20')!;
+      expect(e20).toBeDefined();
+      expect(e20.variants[0].cost).toBe('X');
+
+      const prompt = formatActionPromptForSpeech(e20.variants[0], e20.prefix);
+      expect(prompt).toBe('Roll any number of dice; commune with the cave.');
+    });
   });
 
   describe('4. Spoken Number Normalization & Voice NLP Parser', () => {

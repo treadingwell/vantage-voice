@@ -10,6 +10,12 @@ export function htmlToSpeechText(html: string): string {
   if (!html) return '';
   let text = html;
 
+  // Replace dice cost SVGs with spoken text before stripping tags
+  text = text.replace(/<svg[^>]*>[\s\S]*?#(?:i-)?cost-(?:b)?x[\s\S]*?<\/svg>/gi, ' Roll any number of dice; ');
+  text = text.replace(/<svg[^>]*>[\s\S]*?#(?:i-)?cost-(\d+)[\s\S]*?<\/svg>/gi, (_, n) => ` Roll ${n} ${n === '1' ? 'die' : 'dice'}; `);
+  // Replace "Roll X dice" / "Roll X skill dice" in story text
+  text = text.replace(/\bRoll X (?:skill )?dice\b/gi, 'Roll any number of dice');
+
   // Remove svg and script/style tags completely
   text = text.replace(/<svg[^>]*>[\s\S]*?<\/svg>/gi, ' ');
   text = text.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ');
@@ -169,6 +175,10 @@ export function normalizeForSpeech(input: string): string {
   // Slashes: "move / look" -> "move or look"
   text = text.replace(/\s*\/\s*/g, ' or ');
 
+  // Colons after option prefixes or list labels become periods so speech engines maintain strong, consistent volume
+  text = text.replace(/\b(Option \w+):\s*/gi, '$1. ');
+  text = text.replace(/\b(Multiple options for [^.:;]+):\s*/gi, '$1. ');
+
   // Parentheses and brackets become pauses. An opening one gets a semicolon, which neural
   // voices read as a natural break where a comma sounded clipped:
   // "location (view page 9)" -> "location; view page 9"
@@ -209,20 +219,38 @@ export function formatActionPromptForSpeech(
   _prefix?: BookPrefix
 ): string {
   const plain = variant.actionPlain.trim();
+  const isXCost =
+    variant.cost !== null &&
+    variant.cost !== undefined &&
+    String(variant.cost).trim().toUpperCase() === 'X';
+
   if (!plain) {
+    if (isXCost) {
+      return 'Roll any number of dice;';
+    }
     return 'Perform the action for this location.';
   }
 
   // Remove trailing period/punctuation for prompt building
   const stripped = plain.replace(/[.]+$/, '').trim();
+  const words = stripped.split(/\s+/);
+  words[0] = words[0].toLowerCase();
+  const cleanAction = words.join(' ');
 
-  if (variant.cost !== null && variant.cost > 0) {
-    const dieWord = variant.cost === 1 ? 'die' : 'dice';
-    // Lowercase the first word when following "to"
-    const words = stripped.split(/\s+/);
-    words[0] = words[0].toLowerCase();
-    const cleanAction = words.join(' ');
-    return `Roll ${variant.cost} ${dieWord} to ${cleanAction}.`;
+  if (isXCost) {
+    return `Roll any number of dice; ${cleanAction}.`;
+  }
+
+  const numericCost =
+    typeof variant.cost === 'number'
+      ? variant.cost
+      : variant.cost
+      ? parseInt(String(variant.cost), 10)
+      : null;
+
+  if (numericCost !== null && !isNaN(numericCost) && numericCost > 0) {
+    const dieWord = numericCost === 1 ? 'die' : 'dice';
+    return `Roll ${numericCost} ${dieWord} to ${cleanAction}.`;
   }
 
   // Cost is null or 0: just the action text
