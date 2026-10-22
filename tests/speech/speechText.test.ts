@@ -38,7 +38,7 @@ describe('normalizeForSpeech', () => {
 
   it('turns slashes and parentheses into words and pauses', () => {
     expect(normalizeForSpeech('matching that skill: move / look ( 061 ); anything else ( 054 ).')).toBe(
-      'matching that skill: move or look, sixty one; anything else, fifty four.'
+      'matching that skill: move or look; sixty one; anything else; fifty four.'
     );
   });
 
@@ -62,8 +62,25 @@ describe('normalizeForSpeech', () => {
 describe('splitIntoSentences', () => {
   it('splits on sentence boundaries', () => {
     expect(
-      splitIntoSentences('Roll six dice. At the top of the cliff, you see far. Gain two boost!')
-    ).toEqual(['Roll six dice.', 'At the top of the cliff, you see far.', 'Gain two boost!']);
+      splitIntoSentences(
+        'At the top of the cliff, you are greeted by a view of the area. The narrow tunnel curves and winds down into the earth.'
+      )
+    ).toEqual([
+      'At the top of the cliff, you are greeted by a view of the area.',
+      'The narrow tunnel curves and winds down into the earth.',
+    ]);
+  });
+
+  it('merges short sentences into a neighbour so the voice has context', () => {
+    expect(
+      splitIntoSentences(
+        'If you pay six coins, the cartographer sells you a map. Go to cave ninety seven.'
+      )
+    ).toEqual(['If you pay six coins, the cartographer sells you a map. Go to cave ninety seven.']);
+    expect(
+      splitIntoSentences('Choose one. Hike around the mountain to reach the far side of the valley.')
+    ).toEqual(['Choose one. Hike around the mountain to reach the far side of the valley.']);
+    expect(splitIntoSentences('Go to two ninety two.')).toEqual(['Go to two ninety two.']);
   });
 
   it('splits very long sentences at clause breaks', () => {
@@ -78,12 +95,24 @@ describe('normalizeForSpeech edge cases from the dataset', () => {
   it('handles variable costs, abbreviations, grids and coordinates', () => {
     expect(normalizeForSpeech('you may pay $X to decrease this cost')).toBe('you may pay X coins to decrease this cost.');
     expect(normalizeForSpeech('the edges (e.g., when looking) and i.e. no rotating')).toBe(
-      'the edges, for example, when looking, and that is, no rotating.'
+      'the edges; for example, when looking, and that is, no rotating.'
     );
     expect(normalizeForSpeech('a 3x3 grid')).toBe('a three by three grid.');
     expect(normalizeForSpeech('your path is A1, B1, C2')).toBe('your path is A one, B one, C two.');
     expect(normalizeForSpeech('vocalized 1s and 0s')).toBe('vocalized ones and zeros.');
     expect(normalizeForSpeech('the 322nd floor')).toBe('the three twenty second floor.');
     expect(normalizeForSpeech('the 20th time')).toBe('the twentieth time.');
+  });
+});
+
+describe('parenthetical pauses', () => {
+  it('uses a semicolon for an opening parenthesis', () => {
+    expect(
+      normalizeForSpeech(
+        'the sentient highlights your current location (view page 9 in the Book of Vantages; you are in region L).'
+      )
+    ).toBe(
+      'the sentient highlights your current location; view page nine in the Book of Vantages; you are in region L.'
+    );
   });
 });

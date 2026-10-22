@@ -169,8 +169,10 @@ export function normalizeForSpeech(input: string): string {
   // Slashes: "move / look" -> "move or look"
   text = text.replace(/\s*\/\s*/g, ' or ');
 
-  // Parentheses and brackets become comma pauses: "look (061);" -> "look, 061;"
-  text = text.replace(/\s*[([]\s*/g, ', ').replace(/\s*[)\]]\s*/g, ', ');
+  // Parentheses and brackets become pauses. An opening one gets a semicolon, which neural
+  // voices read as a natural break where a comma sounded clipped:
+  // "location (view page 9)" -> "location; view page 9"
+  text = text.replace(/\s*[([]\s*/g, '; ').replace(/\s*[)\]]\s*/g, ', ');
 
   // ALL-CAPS words (action verbs) -> lowercase
   text = text.replace(/\b[A-Z]{2,}\b/g, (w) => w.toLowerCase());

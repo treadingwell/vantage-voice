@@ -24,7 +24,7 @@ describe('svgSprites', () => {
     expect(SVG_SPRITES_HTML).toContain('id="i-secret"');
     expect(ALL_ICON_IDS).toContain('i-move');
     expect(ALL_ICON_IDS).toContain('i-secret');
-    expect(ALL_ICON_IDS.length).toBe(68);
+    expect(ALL_ICON_IDS.length).toBe(69);
   });
 
   it('injects the SVG sprite element into document.body only once', () => {
@@ -122,5 +122,28 @@ describe('svgSprites', () => {
       const matches = result.match(/use href/g);
       expect(matches?.length).toBe(1);
     });
+  });
+});
+
+describe('icon words in story text', () => {
+  it('adds icons and bold to game-term quantities only', async () => {
+    const { enhanceStoryHtmlWithIcons } = await import('../../src/ui/svgSprites');
+    const html = enhanceStoryHtmlWithIcons(
+      '<p>Gain 2 boost and lose 1 time. Pay $5 to the Traveler. By the time you reach it, gain 3 coins.</p>'
+    );
+    expect(html).toContain('<strong class="icon-word icon-word-boost">');
+    expect(html).toContain('#i-boost');
+    expect(html).toContain('<strong class="icon-word icon-word-time">');
+    expect(html).toContain('<strong class="icon-word icon-word-coin">');
+    expect(html).toContain('#i-traveler');
+    expect((html.match(/icon-word-coin/g) ?? []).length).toBe(2);
+    // "by the time you reach" is ordinary English, not the time resource
+    expect((html.match(/icon-word-time/g) ?? []).length).toBe(1);
+  });
+
+  it('leaves skill spans and location numbers alone', async () => {
+    const { enhanceStoryHtmlWithIcons } = await import('../../src/ui/svgSprites');
+    const html = enhanceStoryHtmlWithIcons("<p>Gain <span class='move skill'>1 move</span>; go to <span class='loc-num'>2 boost</span>.</p>");
+    expect(html).not.toContain('icon-word');
   });
 });

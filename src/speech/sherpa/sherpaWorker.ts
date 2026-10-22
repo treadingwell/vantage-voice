@@ -36,8 +36,8 @@ let micSampleRate = ASR_SAMPLE_RATE;
 
 // Per-model generation settings
 const TTS_GENERATION_DEFAULTS: Record<string, Record<string, unknown>> = {
-  // 3 flow steps: ~3x faster than the default 5 with little audible difference
-  'supertonic-2': { numSteps: 3, extra: { lang: 'en' } },
+  // 4 flow steps: chosen by ear over 3 (slips more words) and 5 (slower on phones)
+  'supertonic-2': { numSteps: 4, extra: { lang: 'en' } },
 };
 
 function post(msg: SherpaWorkerMessage, transfer: Transferable[] = []): void {
@@ -63,8 +63,9 @@ function getModule(baseUrl: string): Promise<SherpaModule> {
 
 /**
  * Copies a model's files into the in-memory filesystem, runs `create`, then deletes the
- * copies: the runtime has read them into its own memory by then, so keeping them would
- * double the footprint (matters on iOS).
+ * .onnx copies: the runtime has read those into its own memory by then, so keeping them
+ * would double the footprint (matters on iOS). Other files stay, because some are read
+ * while speaking (Kitten's espeak-ng pronunciation data).
  */
 async function withModelFiles<T>(
   mod: SherpaModule,
@@ -76,11 +77,13 @@ async function withModelFiles<T>(
   const written: string[] = [];
   try {
     for (const file of model.files) {
-      const data = await readModelFile(modelFileUrl(baseUrl, model.dir, file));
       const path = `${dir}/${file}`;
+      // Kept support files may still be there from an earlier load
+      if (!file.endsWith('.onnx') && fileExists(mod, path)) continue;
+      const data = await readModelFile(modelFileUrl(baseUrl, model.dir, file));
       mod.FS.mkdirTree(path.slice(0, path.lastIndexOf('/')));
       mod.FS.writeFile(path, data);
-      written.push(path);
+      if (file.endsWith('.onnx')) written.push(path);
     }
     return create(dir);
   } finally {
@@ -91,6 +94,15 @@ async function withModelFiles<T>(
         // ignore
       }
     }
+  }
+}
+
+function fileExists(mod: SherpaModule, path: string): boolean {
+  try {
+    mod.FS.stat(path);
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -153,7 +165,8 @@ function unloadTts(): void {
 function generate(text: string, sid: number, speed: number): { samples: Float32Array; sampleRate: number } {
   if (!tts || !ttsModel) throw new Error('No TTS model loaded');
   const audio = tts.generateWithConfig(text, {
-    sid,
+    // Voice indexes differ per model (10 Supertonic, 8 Kitten); never pass one out of range
+    sid: Math.min(Math.max(0, sid), Math.max(0, tts.numSpeakers - 1)),
     speed,
     ...(TTS_GENERATION_DEFAULTS[ttsModel.id] ?? {}),
   });
@@ -258,7 +271,11 @@ function acceptAudio(samples: Float32Array, sampleRate: number): void {
   }
 }
 
-self.onmessage = async (event: MessageEvent<SherpaRequest>) => {
+// Requests run one at a time: loads await file reads, and without this a generate could
+// run against a half-swapped model when the narrator is switched mid-speech
+let requestQueue: Promise<void> = Promise.resolve();
+
+self.onmessage = (event: MessageEvent<SherpaRequest>) => {
   const msg = event.data;
 
   // Streaming messages carry no id and get no reply
@@ -275,6 +292,10 @@ self.onmessage = async (event: MessageEvent<SherpaRequest>) => {
     return;
   }
 
+  requestQueue = requestQueue.then(() => handleRequest(msg));
+};
+
+async function handleRequest(msg: Exclude<SherpaRequest, { type: 'asrAudio' | 'asrReset' }>): Promise<void> {
   try {
     switch (msg.type) {
       case 'loadTts':
@@ -302,4 +323,4 @@ self.onmessage = async (event: MessageEvent<SherpaRequest>) => {
   } catch (err) {
     post({ type: 'reply', id: msg.id, ok: false, error: err instanceof Error ? err.message : String(err) });
   }
-};
+}

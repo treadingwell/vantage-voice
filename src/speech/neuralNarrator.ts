@@ -4,11 +4,40 @@ import type { GeneratedSpeech } from './sherpa/sherpaProtocol';
 // Very long sentences are split at clause breaks so the first audio starts sooner
 const MAX_CHUNK_CHARS = 180;
 
+// Neural voices garble very short inputs: measured with Kroko transcription, Supertonic
+// had ~27% word errors on standalone sentences like "Go to two ninety two." versus ~6%
+// once each was joined to a neighbouring sentence. Chunks shorter than this are merged.
+const MIN_CHUNK_WORDS = 7;
+
+const wordCount = (s: string) => s.split(/\s+/).filter(Boolean).length;
+
 /**
- * Splits narration into sentence-sized chunks. Each chunk is synthesized on its own, which
- * keeps first-audio latency low and gives a clean, controllable pause between sentences.
+ * Splits narration into chunks that are synthesized one at a time, which keeps first-audio
+ * latency low and gives a controllable pause between chunks. Short sentences are merged
+ * into a neighbour so every chunk gives the voice enough context.
  */
 export function splitIntoSentences(text: string): string[] {
+  const chunks = splitRaw(text);
+  const merged: string[] = [];
+  let carry = '';
+  for (const chunk of chunks) {
+    const combined = carry ? `${carry} ${chunk}` : chunk;
+    if (wordCount(combined) < MIN_CHUNK_WORDS) {
+      carry = combined;
+    } else {
+      merged.push(combined);
+      carry = '';
+    }
+  }
+  // A short tail joins the previous chunk
+  if (carry) {
+    if (merged.length > 0) merged[merged.length - 1] = `${merged[merged.length - 1]} ${carry}`;
+    else merged.push(carry);
+  }
+  return merged;
+}
+
+function splitRaw(text: string): string[] {
   const sentences = text
     .replace(/\s+/g, ' ')
     .trim()

@@ -289,7 +289,7 @@ export class StoryView {
                 <div class="branch-choice-card ${isChosen ? 'is-chosen' : ''}" data-choice-index="${idx}">
                   <button type="button" class="branch-summary-btn">
                     <span class="branch-num-tag">Option ${idx + 1}</span>
-                    <span class="branch-title">${choice.summary}</span>
+                    <span class="branch-title">${enhanceStoryHtmlWithIcons(choice.summary)}</span>
                     <span class="branch-chevron" aria-hidden="true">${isChosen ? '▼' : '▶'}</span>
                   </button>
                   <div class="branch-body-content ${isChosen ? 'is-expanded' : 'is-collapsed'}">

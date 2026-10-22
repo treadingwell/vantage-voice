@@ -1,6 +1,6 @@
 /**
  * Rulepop SVG Sprites and Icon Helpers
- * Contains all 68 symbol definitions extracted from Rulepop Vantage Storybook
+ * Contains 68 symbol definitions extracted from Rulepop Vantage Storybook, plus a matching key-secret
  * for offline rendering of action icons, costs, directions, and dice slots.
  */
 
@@ -59,6 +59,10 @@ export const SVG_SPRITES_HTML = `<svg id="sprites" style="display: none;" role="
 			<symbol id="i-secret" viewBox="0 0 500 500">
 				<path fill="#4a433d" d="M317 0H183L67 67 0 183v134l67 116 116 67h134l116-67 67-116V183L433 67 317 0z"/>
 				<path fill="#fed77e" d="m101 169-69 29L91 97l92-50c11 6 16 14 18 28l-20 45-80 49Zm148-90 27 15h12l-39-77-37 77h12l25-15Zm156 90 70 29-59-101-92-50c-11 6-16 14-18 28l19 45 80 49ZM251 422l-27-15h-12l39 77 37-77h-12l-25 15Zm74-42-19 45c2 13 7 22 18 27l92-49 59-101-70 28-80 50Zm-224-50-69-28 59 101 92 49c11-5 16-14 18-27l-20-45-80-50Zm149 65L30 250l220-141 222 141-222 145Zm0-56a89 89 0 1 0 0-178 89 89 0 0 0 0 178Z"/>
+			</symbol>
+			<symbol id="key-secret" viewBox="0 0 500 500">
+				<circle cx="250" cy="250" r="250" fill="hsl(30 8% 70%)"/>
+				<use href="#i-secret" transform="translate(25, 25) scale(0.9)"/>
 			</symbol>
 			<symbol id="key-take" viewBox="0 0 500 500">
 				<circle cx="250" cy="250" r="250" fill="hsl(49 100% 45%)"/>
@@ -301,6 +305,7 @@ export const SVG_SPRITES_HTML = `<svg id="sprites" style="display: none;" role="
 export const SYMBOL_VIEWBOXES: Record<string, string> = {
   "i-depart": "0 0 500 500",
   "key-depart": "0 0 500 500",
+  "key-secret": "0 0 500 500",
   "key-engage": "0 0 500 500",
   "key-help": "0 0 500 500",
   "key-look": "0 0 500 500",
@@ -382,22 +387,12 @@ export function injectSvgSprites(): void {
     return;
   }
 
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(SVG_SPRITES_HTML, 'image/svg+xml');
-  const svgEl = doc.querySelector('svg');
-  if (svgEl) {
-    // Ensure display none
-    svgEl.setAttribute('style', 'display: none;');
-    svgEl.setAttribute('aria-hidden', 'true');
-    const imported = document.importNode(svgEl, true);
-    document.body.insertBefore(imported, document.body.firstChild);
-  } else {
-    const div = document.createElement('div');
-    div.id = 'vantage-sprites-fallback';
-    div.style.display = 'none';
-    div.innerHTML = SVG_SPRITES_HTML;
-    document.body.insertBefore(div, document.body.firstChild);
-  }
+  // Parse with the HTML parser: it puts <svg> content in the SVG namespace. (Parsing the
+  // markup as image/svg+xml without an xmlns attribute yields namespace-less elements
+  // that browsers never render, which left every icon blank.)
+  document.body.insertAdjacentHTML('afterbegin', SVG_SPRITES_HTML);
+  const svgEl = document.getElementById('sprites');
+  svgEl?.setAttribute('aria-hidden', 'true');
 }
 
 /**
@@ -412,6 +407,60 @@ export function renderIconSvg(iconId: string, className?: string): string {
   const viewBox = SYMBOL_VIEWBOXES[cleanId] ? ` viewBox="${SYMBOL_VIEWBOXES[cleanId]}"` : ' viewBox="0 0 500 500"';
   const cls = className ? ` class="${className}"` : ' class="icon"';
   return `<svg${cls}${viewBox} aria-hidden="true"><use href="#${cleanId}"></use></svg>`;
+}
+
+/**
+ * Game terms that have a Rulepop icon. Resource words only count as game terms with a
+ * quantity ("2 boost", "X morale", "1 time"), so everyday phrases like "by the time you
+ * reach" stay plain.
+ */
+const ICON_WORD_PATTERN =
+  /(\$(?:\d+|X)\b)|\b((?:\d+|X)\s+(boost|health|morale|time|coins?))\b|\b(Traveler|reserve)\b/g;
+
+const ICON_WORD_ICONS: Record<string, string> = {
+  boost: 'i-boost',
+  coin: 'i-coin',
+  health: 'i-health',
+  morale: 'i-morale',
+  time: 'i-time',
+  traveler: 'i-traveler',
+  reserve: 'i-reserve',
+};
+
+// Text inside these already has its own icon/styling
+const ICON_WORD_SKIP_SELECTOR =
+  'svg, .icon-word, .loc-num, .card-num, .move, .look, .engage, .help, .take, .overpower, .depart, .action';
+
+/** Wraps icon words in text nodes with an icon and bold styling. */
+function decorateIconWords(doc: Document): void {
+  const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
+  const textNodes: Text[] = [];
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    const text = n as Text;
+    if (!text.parentElement?.closest(ICON_WORD_SKIP_SELECTOR) && ICON_WORD_PATTERN.test(text.data)) {
+      textNodes.push(text);
+    }
+    ICON_WORD_PATTERN.lastIndex = 0;
+  }
+
+  for (const text of textNodes) {
+    const html = escapeHtml(text.data).replace(
+      ICON_WORD_PATTERN,
+      (match, coins: string | undefined, _qty, resource: string | undefined, named: string | undefined) => {
+        const key = coins ? 'coin' : (resource ?? named ?? '').toLowerCase().replace(/^coins$/, 'coin');
+        const iconId = coins ? 'i-coin' : ICON_WORD_ICONS[key];
+        if (!iconId) return match;
+        return `<strong class="icon-word icon-word-${key}">${renderIconSvg(iconId, 'icon-word-icon')}${match}</strong>`;
+      }
+    );
+    const span = doc.createElement('span');
+    span.innerHTML = html;
+    text.replaceWith(...Array.from(span.childNodes));
+  }
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 /**
@@ -442,6 +491,9 @@ export function enhanceStoryHtmlWithIcons(html: string): string {
           el.insertAdjacentHTML('afterbegin', iconHtml);
         });
       }
+
+      // 1b. Game-term icon words in plain text ("2 boost", "$5", "the Traveler")
+      decorateIconWords(doc);
 
       // 2. Enrich setup character cards in s0 if present
       const setupListItems = doc.querySelectorAll('.setup-steps-list li');

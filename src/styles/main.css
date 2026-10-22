@@ -572,11 +572,15 @@ svg.icon {
 }
 
 .book-btn-label {
-  font-size: 0.72rem;
+  /* Shrinks on narrow phones so "OVERPOWER" fits its tile */
+  font-size: clamp(0.56rem, 2.7vw, 0.72rem);
   font-weight: 700;
   color: var(--text-dim);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
+  max-width: 100%;
+  text-align: center;
+  overflow-wrap: anywhere;
 }
 
 /* 0-9 Numpad Grid */
@@ -2316,4 +2320,116 @@ span.card-num {
   font-size: 0.7rem;
   color: var(--text-muted);
   margin-top: 2px;
+}
+
+/* ===== Lookup chips =====
+   renderIconSvg() puts the class on the <svg> itself, so size it directly
+   (the older ".x svg" rules above never matched and left icons at zero size). */
+.recent-chip-icon,
+.preview-chip-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.preview-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.chip-svg-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+/* Wrap instead of scrolling chips off the edge of narrow screens */
+.preview-chips-scroll {
+  flex-wrap: wrap;
+  overflow-x: visible;
+}
+
+.preview-chip-book {
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+.preview-chip-verb {
+  color: var(--text-main);
+  font-weight: 800;
+}
+
+.preview-chip:hover .preview-chip-book,
+.preview-chip:active .preview-chip-book {
+  color: #ffffff;
+}
+
+/* Cost hexagon is drawn dark (as on the printed cards); give it a light badge so it
+   reads on the dark story card */
+.cost-svg-wrapper {
+  background: #e8edf3;
+  border-radius: 12px;
+  padding: 4px;
+  box-shadow: 0 0 0 1px var(--border-strong);
+}
+
+/* Game-term icon words in story text ("2 boost", "$5", "the Traveler") */
+.icon-word {
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.icon-word-icon {
+  width: 1.15em;
+  height: 1.15em;
+  vertical-align: -0.22em;
+  margin-right: 0.2em;
+  display: inline-block;
+}
+
+/* Skill words ("1 move") already carry an icon; make them bold to match */
+.result-html-body span.move,
+.result-html-body span.look,
+.result-html-body span.engage,
+.result-html-body span.help,
+.result-html-body span.take,
+.result-html-body span.overpower,
+.result-html-body span.depart {
+  font-weight: 800;
+}
+
+/* Story header and action icons: the class is on the <svg> itself */
+.dir-svg-icon,
+.header-book-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  display: block;
+}
+
+.dice-cost-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.book-svg-icon {
+  width: 36px;
+  height: 36px;
+  display: block;
+}
+
+/* Voice dock: let the badges wrap instead of sliding under the mic on narrow phones */
+.dock-mode-row {
+  flex-wrap: wrap;
+  row-gap: 3px;
+}
+
+.dock-engine-badge {
+  white-space: nowrap;
+}
+
+.dock-narrator-btn {
+  white-space: nowrap;
 }
