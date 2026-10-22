@@ -519,6 +519,8 @@ export class VoiceController {
       case 'CONFIRM_DONE':
         if (this.state.mode === 'WAITING_FOR_DONE') {
           await this.revealResult();
+        } else if (this.state.mode === 'BRANCHING_CHOICE') {
+          await this.finishFlow();
         }
         break;
 
@@ -710,7 +712,7 @@ export class VoiceController {
       this.setMode('BRANCHING_CHOICE');
       this.speech.stopListening();
       await this.settleAudioHardware();
-      const branchPrompt = formatBranchChoicesPrompt(parsed.choices);
+      const branchPrompt = formatBranchChoicesPrompt(parsed.choices, parsed.isSequential, 0);
       this.notify();
       await this.speech.speak(branchPrompt);
 
@@ -727,6 +729,10 @@ export class VoiceController {
   public async selectBranchChoice(choiceIndex: number): Promise<void> {
     await this.unlockAudio();
 
+    if (choiceIndex < 0) {
+      choiceIndex = this.state.chosenBranchIndex !== null ? this.state.chosenBranchIndex + 1 : 0;
+    }
+
     if (!this.state.activeChoices || choiceIndex < 0 || choiceIndex >= this.state.activeChoices.length) {
       return;
     }
@@ -742,6 +748,20 @@ export class VoiceController {
 
     if (choice.speechText) {
       await this.speech.speak(choice.speechText);
+    }
+
+    if (this.parsedResultCache?.isSequential) {
+      const nextStep = choiceIndex + 1;
+      if (nextStep < this.state.activeChoices.length) {
+        this.setMode('BRANCHING_CHOICE');
+        this.speech.stopListening();
+        await this.settleAudioHardware();
+        const nextPrompt = formatBranchChoicesPrompt(this.state.activeChoices, true, nextStep);
+        this.notify();
+        await this.speech.speak(nextPrompt);
+        await this.listenForAnswer();
+        return;
+      }
     }
 
     await this.finishFlow();
@@ -856,7 +876,11 @@ export class VoiceController {
       await this.speech.speak(choice.speechText);
     } else if (this.state.mode === 'BRANCHING_CHOICE' && this.state.activeChoices.length > 0) {
       let fullText = this.parsedResultCache?.mainSpeechText || '';
-      const branchPrompt = formatBranchChoicesPrompt(this.state.activeChoices);
+      const branchPrompt = formatBranchChoicesPrompt(
+        this.state.activeChoices,
+        this.parsedResultCache?.isSequential,
+        this.state.chosenBranchIndex !== null ? this.state.chosenBranchIndex + 1 : 0
+      );
       fullText = fullText ? `${fullText} ${branchPrompt}` : branchPrompt;
       await this.speech.speak(fullText);
     } else if (this.parsedResultCache?.mainSpeechText) {

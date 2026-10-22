@@ -84,6 +84,8 @@ export interface CandidateMatch {
 export interface ParsedBranchChoice {
   index: number;
   summary: string;
+  summaryHtml?: string;
+  actionHtml?: string;
   html: string;
   speechText: string;
 }
@@ -92,6 +94,7 @@ export interface ParsedResultContent {
   mainHtml: string;
   mainSpeechText: string;
   hasChoices: boolean;
+  isSequential: boolean;
   choices: ParsedBranchChoice[];
 }
 

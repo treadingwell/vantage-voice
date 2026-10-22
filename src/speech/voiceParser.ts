@@ -430,6 +430,20 @@ export function parseVoiceInput(
   if (context.mode === 'BRANCHING_CHOICE' && context.activeChoices && context.activeChoices.length > 0) {
     const choices = context.activeChoices;
 
+    // Check if player says "continue", "next", "next result", "go deeper", "proceed"
+    if (/\b(continue|next|next result|proceed|go deeper|keep going)\b/i.test(lower)) {
+      return {
+        type: 'SELECT_OPTION',
+        optionIndex: -1,
+        optionText: 'Continue',
+      };
+    }
+
+    // Check if player says "done", "stop", "finish" standalone during branching choice to stop
+    if (!extractNumberFromTranscript(cleanTranscript) && /^(done|stop|finish|finished|no more|quit|end|i'm done|im done)$/i.test(lower)) {
+      return { type: 'CONFIRM_DONE', rawTranscript: cleanTranscript };
+    }
+
     // Check positional matches
     for (const [key, index] of SORTED_POSITIONAL_ENTRIES) {
       if (lower === key || new RegExp(`\\b${key}\\b`, 'i').test(lower)) {

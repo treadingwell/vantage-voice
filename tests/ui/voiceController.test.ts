@@ -445,5 +445,27 @@ describe('VoiceController & State Machine Integration', () => {
       await controller.handleTranscript('card 236', true);
       expect(controller.getState().mode).toBe('DISAMBIGUATING');
     });
+
+    it('handles sequential progressive choices with "continue" and "done" on o235', async () => {
+      await controller.handleTextInput('o235');
+      await controller.revealResult();
+
+      expect(controller.getState().mode).toBe('BRANCHING_CHOICE');
+      expect(controller.getState().chosenBranchIndex).toBeNull();
+
+      // Say "continue" to proceed to step 1 (excavate box with card)
+      await controller.handleTranscript('continue', true);
+      expect(controller.getState().chosenBranchIndex).toBe(0);
+      expect(controller.getState().mode).toBe('BRANCHING_CHOICE');
+
+      // Say "continue" to proceed to step 2 (fungus sediment)
+      await controller.handleTranscript('continue', true);
+      expect(controller.getState().chosenBranchIndex).toBe(1);
+      expect(controller.getState().mode).toBe('BRANCHING_CHOICE');
+
+      // Say "done" / "stop" to stop at this step
+      await controller.handleTranscript('done', true);
+      expect(controller.getState().mode).toBe('IDLE');
+    });
   });
 });

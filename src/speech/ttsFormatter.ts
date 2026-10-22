@@ -264,6 +264,7 @@ export function parseAndFormatResult(resultHtml: string): ParsedResultContent {
       mainHtml: '',
       mainSpeechText: '',
       hasChoices: false,
+      isSequential: false,
       choices: [],
     };
   }
@@ -285,6 +286,7 @@ export function parseAndFormatResult(resultHtml: string): ParsedResultContent {
     choices.push({
       index,
       summary: cleanSummary,
+      summaryHtml: rawSummary.trim(),
       html: rawBody.trim(),
       speechText: cleanSpeech,
     });
@@ -294,10 +296,28 @@ export function parseAndFormatResult(resultHtml: string): ParsedResultContent {
   const mainHtml = resultHtml.replace(/<details[^>]*>[\s\S]*?<\/details>/gi, '').trim();
   const mainSpeechText = htmlToSpeechText(mainHtml);
 
+  const isSequential =
+    /(?:then read the next result|read the next result only)/i.test(resultHtml) ||
+    (choices.length > 1 && choices.every((c) => /^continue/i.test(c.summary.trim())));
+
+  // If sequential, extract the required action (e.g. overpower-2-DIG) from the preceding text for each continue step
+  if (isSequential) {
+    for (let i = 0; i < choices.length; i++) {
+      const priorHtml = i === 0 ? mainHtml : choices[i - 1].html;
+      const actionMatch = priorHtml.match(
+        /continue with (?:an? )?(<span class=['"][^'"]*skill['"]>[\s\S]*?<\/span>)/i
+      );
+      if (actionMatch) {
+        choices[i].actionHtml = actionMatch[1];
+      }
+    }
+  }
+
   return {
     mainHtml,
     mainSpeechText,
     hasChoices: choices.length > 0,
+    isSequential,
     choices,
   };
 }
@@ -348,8 +368,21 @@ export function formatDisambiguationPrompt(result: StoryLookupResult): string {
   return `Multiple options for ${bookTitle} ${result.paddedNumber}: ${optionsString}. Which one?`;
 }
 
-export function formatBranchChoicesPrompt(choices: ParsedBranchChoice[]): string {
+export function formatBranchChoicesPrompt(
+  choices: ParsedBranchChoice[],
+  isSequential: boolean = false,
+  activeStep: number = 0
+): string {
   if (!choices || choices.length === 0) return '';
+  if (isSequential) {
+    const nextChoice = choices[activeStep];
+    const isFinal = activeStep >= choices.length - 1;
+    if (nextChoice?.actionHtml) {
+      const spokenAction = htmlToSpeechText(nextChoice.actionHtml).replace(/[.;]+$/, '');
+      return `You may either stop or continue with an ${spokenAction} action. Say "Continue" to read the ${isFinal ? 'final' : 'next'} result, or say "Done" to stop.`;
+    }
+    return `Say "Continue" to read the ${isFinal ? 'final' : 'next'} result, or say "Done" to stop.`;
+  }
   const parts = choices.map((c) => `Option ${c.index + 1}: ${c.summary.replace(/[.!?]+$/, '')}.`);
   return `${parts.join(' ')} Which do you choose?`;
 }

@@ -477,14 +477,35 @@ export function enhanceStoryHtmlWithIcons(html: string): string {
       const parser = new DOMParser();
       const doc = parser.parseFromString(`<body>${html}</body>`, 'text/html');
 
+      // 0. Ensure Rulepop inline SVGs (.◊, &loz;) and dice cost icons are styled and sized
+      doc.querySelectorAll('svg').forEach((svg) => {
+        const cls = svg.getAttribute('class') || '';
+        if (cls.includes('◊') || cls.includes('&loz;') || cls.includes('loz')) {
+          svg.classList.add('rulepop-symbol-svg');
+        }
+        const use = svg.querySelector('use');
+        const href = use ? (use.getAttribute('href') || use.getAttribute('xlink:href') || '') : '';
+        if (href.includes('cost')) {
+          svg.classList.add('inline-cost-dice-svg');
+        }
+      });
+
       // 1. Enrich elements with skill classes (.move, .look, .engage, etc.)
       for (const skill of skills) {
         const els = doc.querySelectorAll(`.${skill}`);
         els.forEach((el) => {
-          if (el.tagName.toLowerCase() === 'svg' || el.querySelector('svg')) {
+          if (el.tagName.toLowerCase() === 'svg') {
             return;
           }
           if (el.parentElement?.closest(`.${skill}`)) {
+            return;
+          }
+          // Do not duplicate if this skill's icon is already inside el
+          const existingUse = el.querySelector('use');
+          const existingHref = existingUse
+            ? existingUse.getAttribute('href') || existingUse.getAttribute('xlink:href') || ''
+            : '';
+          if (existingHref.includes(`i-${skill}`) || el.querySelector(`.icon-${skill}`)) {
             return;
           }
           const iconHtml = renderIconSvg(`i-${skill}`, `inline-skill-icon icon-${skill}`);

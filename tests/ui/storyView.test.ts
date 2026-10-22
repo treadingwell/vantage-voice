@@ -157,4 +157,31 @@ describe('StoryView Component', () => {
     expect(repeatPromptPostBtn?.getAttribute('title')).toContain('Repeat Pre-Done Prompt');
     expect(repeatPromptPostBtn?.textContent).toContain('Repeat Prompt');
   });
+
+  it('renders progressive sequential results one step at a time for o235', async () => {
+    await controller.handleTextInput('o235');
+    await controller.revealResult();
+
+    // Initial reveal: only the first Continue option should be shown
+    const section = container.querySelector('.sequential-branch-section');
+    expect(section).not.toBeNull();
+    expect(section?.textContent).toContain('Progressive Result');
+
+    const nextBtn = container.querySelector('.branch-continue-btn') as HTMLButtonElement;
+    expect(nextBtn).not.toBeNull();
+    expect(nextBtn.textContent).toContain('Continue');
+    // Result 2 and Result 3 are not yet shown
+    expect(container.querySelectorAll('.sequential-revealed-step').length).toBe(0);
+
+    // Clicking next button reveals Step 1 (Result 1) and shows Step 2 Continue button
+    nextBtn.click();
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(container.querySelectorAll('.sequential-revealed-step').length).toBe(1);
+    expect(container.textContent).toContain('Skirm spoiler pack');
+
+    // Inline dice cost icon is enhanced with .inline-cost-dice-svg
+    const diceIcons = container.querySelectorAll('.inline-cost-dice-svg');
+    expect(diceIcons.length).toBeGreaterThan(0);
+  });
 });

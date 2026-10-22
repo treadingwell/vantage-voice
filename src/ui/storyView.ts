@@ -279,6 +279,63 @@ export class StoryView {
     }
 
     const choices = this.currentParsedResult.choices;
+    const isSequential = this.currentParsedResult.isSequential;
+
+    if (isSequential) {
+      const nextAvailableIndex = chosenBranchIndex !== null ? chosenBranchIndex + 1 : 0;
+      const visibleChoices = choices.filter((_, idx) => idx <= nextAvailableIndex);
+
+      return `
+        <div class="story-branching-section sequential-branch-section">
+          <div class="branching-heading">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+            <span>Progressive Result (Read Next Result Only):</span>
+          </div>
+          <div class="branch-cards-grid sequential-cards-grid">
+            ${visibleChoices
+              .map((choice: ParsedBranchChoice, idx: number) => {
+                const isRevealed = chosenBranchIndex !== null && idx <= chosenBranchIndex;
+                const isNext = idx === nextAvailableIndex;
+
+                if (isRevealed) {
+                  return `
+                    <div class="branch-choice-card is-chosen is-expanded sequential-revealed-step" data-choice-index="${idx}">
+                      <div class="sequential-step-header">
+                        <span class="branch-step-badge">Result ${idx + 1}</span>
+                        ${choice.actionHtml ? `<span class="branch-step-action-tag">${enhanceStoryHtmlWithIcons(choice.actionHtml)}</span>` : ''}
+                      </div>
+                      <div class="branch-body-content is-expanded">
+                        ${enhanceStoryHtmlWithIcons(choice.html)}
+                      </div>
+                    </div>
+                  `;
+                }
+
+                if (isNext) {
+                  const displaySummary = choice.summaryHtml || choice.summary || 'Continue';
+                  return `
+                    <div class="branch-choice-card is-next-step" data-choice-index="${idx}">
+                      <button type="button" class="branch-summary-btn branch-continue-btn" data-choice-index="${idx}">
+                        <span class="branch-continue-tag">Option ${idx + 1}</span>
+                        <div class="branch-title-group">
+                          <span class="branch-title">${enhanceStoryHtmlWithIcons(displaySummary)}</span>
+                          ${choice.actionHtml ? `<span class="branch-action-preview">${enhanceStoryHtmlWithIcons(choice.actionHtml)}</span>` : ''}
+                        </div>
+                        <span class="branch-chevron" aria-hidden="true">▶</span>
+                      </button>
+                    </div>
+                  `;
+                }
+
+                return '';
+              })
+              .join('')}
+          </div>
+        </div>
+      `;
+    }
 
     return `
       <div class="story-branching-section">
@@ -295,11 +352,12 @@ export class StoryView {
           ${choices
             .map((choice: ParsedBranchChoice, idx: number) => {
               const isChosen = chosenBranchIndex === idx;
+              const displaySummary = choice.summaryHtml || choice.summary;
               return `
                 <div class="branch-choice-card ${isChosen ? 'is-chosen' : ''}" data-choice-index="${idx}">
-                  <button type="button" class="branch-summary-btn">
+                  <button type="button" class="branch-summary-btn" data-choice-index="${idx}">
                     <span class="branch-num-tag">Option ${idx + 1}</span>
-                    <span class="branch-title">${enhanceStoryHtmlWithIcons(choice.summary)}</span>
+                    <span class="branch-title">${enhanceStoryHtmlWithIcons(displaySummary)}</span>
                     <span class="branch-chevron" aria-hidden="true">${isChosen ? '▼' : '▶'}</span>
                   </button>
                   <div class="branch-body-content ${isChosen ? 'is-expanded' : 'is-collapsed'}">
