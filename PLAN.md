@@ -350,3 +350,8 @@ Planned features for future iterations of the Vantage Companion App:
   - Settings and mute appear in both the header and the bottom dock.
   - The recent-lookups row appears after the first lookup and shifts the keypad down once (~30 px).
   - The result card has three repeat-style controls (header *Repeat*, *Repeat Result*, *Repeat Prompt*).
+
+### 8.6 Kokoro Narrator (Oct 22, 2026)
+- Added Kokoro v1.0 int8 (`kokoro-v1`, sherpa `kokoro-int8-multi-lang-v1_0`) as a third narrator, trimmed to English: model, all 54 voice styles (`voices.bin` size must match the model), `lexicon-us-en.txt` and the English espeak-ng files. 143 MB.
+- Settings offers 11 English voices; the default is Heart (sid 3). `getNeuralVoice()` now defaults to the catalog's first voice for each model.
+- Measured on desktop, single-threaded WASM, same 7 s sentence: Supertonic 1.6 s, Kitten 3.3 s, Kokoro 10.6 s. Kokoro is slower than playback, so phones will pause between sentences. kokoroweb.app is faster on iPhone most likely because it can use WebGPU; sherpa's WASM build is CPU-only, and multi-threading needs cross-origin isolation, which GitHub Pages can't enable.

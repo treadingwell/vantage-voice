@@ -12,9 +12,10 @@ const NARRATOR_LABELS: Record<TtsEngineMode, string> = {
   native: 'Phone voice',
   'supertonic-2': 'Supertonic',
   'kitten-nano': 'Kitten',
+  'kokoro-v1': 'Kokoro',
 };
 
-const NARRATOR_ORDER: TtsEngineMode[] = ['native', 'supertonic-2', 'kitten-nano'];
+const NARRATOR_ORDER: TtsEngineMode[] = ['native', 'supertonic-2', 'kitten-nano', 'kokoro-v1'];
 
 export class VoiceDock {
   private container: HTMLElement;

@@ -4,7 +4,9 @@
     "label": "Sherpa speech engine",
     "dir": "sherpa",
     "approxMB": 15,
-    "files": ["sherpa.wasm"]
+    "files": [
+      "sherpa.wasm"
+    ]
   },
   "models": [
     {
@@ -78,6 +80,46 @@
       ]
     },
     {
+      "id": "kokoro-v1",
+      "kind": "tts",
+      "label": "Kokoro",
+      "description": "Richest voice, slowest to generate. 11 English voices.",
+      "dir": "kokoro-int8-v1_0",
+      "approxMB": 143,
+      "source": {
+        "type": "tar",
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-int8-multi-lang-v1_0.tar.bz2",
+        "root": "kokoro-int8-multi-lang-v1_0"
+      },
+      "files": [
+        "model.int8.onnx",
+        "voices.bin",
+        "tokens.txt",
+        "lexicon-us-en.txt",
+        "espeak-ng-data/en_dict",
+        "espeak-ng-data/intonations",
+        "espeak-ng-data/phondata",
+        "espeak-ng-data/phondata-manifest",
+        "espeak-ng-data/phonindex",
+        "espeak-ng-data/phontab",
+        "espeak-ng-data/lang/gmw/en",
+        "espeak-ng-data/lang/gmw/en-US"
+      ],
+      "voices": [
+        { "sid": 3, "label": "Heart (US, warm)" },
+        { "sid": 2, "label": "Bella (US)" },
+        { "sid": 6, "label": "Nicole (US, soft)" },
+        { "sid": 9, "label": "Sarah (US)" },
+        { "sid": 10, "label": "Sky (US)" },
+        { "sid": 16, "label": "Michael (US)" },
+        { "sid": 14, "label": "Fenrir (US, deep)" },
+        { "sid": 18, "label": "Puck (US)" },
+        { "sid": 21, "label": "Emma (UK)" },
+        { "sid": 26, "label": "George (UK, deep)" },
+        { "sid": 25, "label": "Fable (UK)" }
+      ]
+    },
+    {
       "id": "kroko-en",
       "kind": "stt",
       "label": "Kroko streaming",
@@ -89,7 +131,12 @@
         "type": "http",
         "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-en-kroko-2025-08-06/resolve/main"
       },
-      "files": ["encoder.onnx", "decoder.onnx", "joiner.onnx", "tokens.txt"]
+      "files": [
+        "encoder.onnx",
+        "decoder.onnx",
+        "joiner.onnx",
+        "tokens.txt"
+      ]
     }
   ]
 }

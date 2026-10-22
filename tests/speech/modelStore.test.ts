@@ -47,9 +47,10 @@ describe('modelStore', () => {
     vi.unstubAllGlobals();
   });
 
-  it('catalog has the three shipped models', () => {
+  it('catalog has the shipped models', () => {
     expect(getModel('kitten-nano')?.kind).toBe('tts');
     expect(getModel('supertonic-2')?.kind).toBe('tts');
+    expect(getModel('kokoro-v1')?.kind).toBe('tts');
     expect(getModel('kroko-en')?.kind).toBe('stt');
     expect(getModel('nope')).toBeUndefined();
   });

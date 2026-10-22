@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 /**
- * Hosts the sherpa-onnx WASM runtime off the main thread: neural TTS (Kitten, Supertonic)
+ * Hosts the sherpa-onnx WASM runtime off the main thread: neural TTS (Kitten, Supertonic, Kokoro)
  * and streaming speech recognition (Zipformer). The 15 MB WASM compiles synchronously,
  * which Chrome only allows inside a worker.
  */
@@ -115,6 +115,18 @@ function ttsModelConfig(model: ModelEntry, dir: string): Record<string, unknown>
           voices: `${dir}/voices.bin`,
           tokens: `${dir}/tokens.txt`,
           dataDir: `${dir}/espeak-ng-data`,
+          lengthScale: 1.0,
+        },
+      };
+    case 'kokoro-v1':
+      return {
+        kokoro: {
+          model: `${dir}/model.int8.onnx`,
+          voices: `${dir}/voices.bin`,
+          tokens: `${dir}/tokens.txt`,
+          dataDir: `${dir}/espeak-ng-data`,
+          // Dictionary pronunciations first; espeak covers words it lacks
+          lexicon: `${dir}/lexicon-us-en.txt`,
           lengthScale: 1.0,
         },
       };
