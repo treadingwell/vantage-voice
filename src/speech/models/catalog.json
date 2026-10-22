@@ -86,7 +86,6 @@
       "description": "Richest voice, slowest to generate. 11 English voices.",
       "dir": "kokoro-int8-v1_0",
       "approxMB": 143,
-      "parts": { "model.int8.onnx": 2 },
       "source": {
         "type": "tar",
         "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-int8-multi-lang-v1_0.tar.bz2",
