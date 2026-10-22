@@ -778,11 +778,11 @@ export class VoiceController {
     }
   }
 
+  // Repeat never changes mic state: speak() pauses the mic and restores it only if it was on.
   public async handleRepeat(target: 'pre' | 'post' | 'auto' = 'auto'): Promise<void> {
     if (this.state.mode === 'DISAMBIGUATING' && this.state.activeResult) {
       const prompt = formatDisambiguationPrompt(this.state.activeResult);
       await this.speech.speak(prompt);
-      await this.speech.startListening(true);
       return;
     }
 
@@ -804,7 +804,6 @@ export class VoiceController {
     if (resolvedTarget === 'pre') {
       const prompt = formatActionPromptForSpeech(variant, this.state.activeResult.prefix);
       await this.speech.speak(prompt);
-      await this.speech.startListening(true);
       return;
     }
 
@@ -825,8 +824,6 @@ export class VoiceController {
     } else if (this.parsedResultCache?.mainSpeechText) {
       await this.speech.speak(this.parsedResultCache.mainSpeechText);
     }
-
-    await this.speech.startListening(true);
   }
 
   public backToLookup(): void {

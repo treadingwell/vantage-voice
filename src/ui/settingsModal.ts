@@ -59,8 +59,13 @@ export class SettingsModal {
 
     const state = this.controller.getState();
     const isOfflineReady = this.speech.isOfflineModelReady();
-    const voices = this.speech.getVoices();
+    const voices = this.speech.getFilteredVoices();
     const selectedVoice = this.speech.getSelectedVoice();
+    const voiceLanguage = this.speech.getVoiceLanguage();
+    const languageOptions = ['en', ...this.speech.getEnglishVoiceLocales(), 'all'];
+    if (!languageOptions.includes(voiceLanguage)) {
+      languageOptions.splice(1, 0, voiceLanguage);
+    }
     const currentRate = this.speech.getSpeechRate();
 
     this.container.innerHTML = `
@@ -186,6 +191,19 @@ export class SettingsModal {
               />
             </div>
 
+            <!-- Language Filter -->
+            <div class="form-group">
+              <label for="voice-lang-select">Voice Language</label>
+              <select id="voice-lang-select" class="voice-select">
+                ${languageOptions
+                  .map(
+                    (lang) =>
+                      `<option value="${lang}" ${lang === voiceLanguage ? 'selected' : ''}>${this.formatLanguageLabel(lang)}</option>`
+                  )
+                  .join('')}
+              </select>
+            </div>
+
             <!-- Voice Selector -->
             <div class="form-group">
               <label for="voice-select">Narrator Voice</label>
@@ -275,6 +293,13 @@ export class SettingsModal {
       }
     });
 
+    // Language Filter
+    const langSelect = this.container.querySelector('#voice-lang-select') as HTMLSelectElement;
+    langSelect?.addEventListener('change', () => {
+      this.speech.setVoiceLanguage(langSelect.value);
+      this.render();
+    });
+
     // Voice Selector
     const voiceSelect = this.container.querySelector('#voice-select') as HTMLSelectElement;
     voiceSelect?.addEventListener('change', () => {
@@ -292,6 +317,21 @@ export class SettingsModal {
       await this.speech.unlockAudio();
       await this.speech.speak('Vantage voice system online. All storybooks indexed.');
     });
+  }
+
+  private formatLanguageLabel(lang: string): string {
+    if (lang === 'all') return 'All languages';
+    if (lang === 'en') return 'English (all accents)';
+    try {
+      const [base, region] = lang.split('-');
+      const name = new Intl.DisplayNames(['en'], { type: 'language' }).of(base) ?? base;
+      const regionName = region
+        ? new Intl.DisplayNames(['en'], { type: 'region' }).of(region.toUpperCase())
+        : undefined;
+      return regionName ? `${name} (${regionName})` : name;
+    } catch {
+      return lang;
+    }
   }
 
   private async startDownloadOfflineModel(): Promise<void> {

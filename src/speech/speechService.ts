@@ -29,6 +29,42 @@ export const DEFAULT_VOSK_MODEL_URL =
   'https://ccoreilly.github.io/vosk-browser/models/vosk-model-small-en-us-0.15.tar.gz';
 export const VOSK_CACHE_NAME = 'vantage-vosk-model-cache-v1';
 
+const TTS_START_TIMEOUT_MS = 2000;
+const VOICE_LANG_STORAGE_KEY = 'vantage_voice_lang';
+const VOICE_NAME_STORAGE_KEY = 'vantage_voice_name';
+
+/** 'en' matches every English locale; 'all' disables filtering. */
+export const DEFAULT_VOICE_LANGUAGE = 'en';
+
+function normalizeLang(lang: string): string {
+  return lang.toLowerCase().replace('_', '-');
+}
+
+function loadPref(key: string): string | null {
+  try {
+    return typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
+  } catch {
+    return null;
+  }
+}
+
+function savePref(key: string, value: string | null): void {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    if (value === null) {
+      localStorage.removeItem(key);
+    } else {
+      localStorage.setItem(key, value);
+    }
+  } catch {
+    // ignore
+  }
+}
+// Only desktop Chrome needs the pause/resume keep-alive. On iOS Safari and Android,
+// pause() halts the utterance and resume() doesn't reliably restart it.
+const UA = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
+const NEEDS_TTS_KEEPALIVE = /Chrome\//.test(UA) && !/Android|Mobile|iPhone|iPad/i.test(UA);
+
 // Web Speech API interface definitions for strict typechecking across environments
 interface ISpeechRecognitionEvent extends Event {
   readonly resultIndex: number;
@@ -72,9 +108,12 @@ export class SpeechService {
   private activeUtterance: SpeechSynthesisUtterance | null = null;
   private availableVoices: SpeechSynthesisVoice[] = [];
   private selectedVoice: SpeechSynthesisVoice | null = null;
+  private voiceLanguage: string = loadPref(VOICE_LANG_STORAGE_KEY) || DEFAULT_VOICE_LANGUAGE;
   private isAudioUnlocked = false;
   private ttsKeepAliveTimer: ReturnType<typeof setInterval> | null = null;
   private ttsSafetyTimer: ReturnType<typeof setTimeout> | null = null;
+  private ttsStartTimer: ReturnType<typeof setTimeout> | null = null;
+  private finishActiveSpeech: (() => void) | null = null;
 
   // STT State
   private currentEngine: SttEngineMode = 'web-speech';
@@ -198,24 +237,33 @@ export class SpeechService {
   private autoSelectPreferredVoice(): void {
     if (
       this.selectedVoice &&
-      this.availableVoices.some((v) => v.voiceURI === this.selectedVoice?.voiceURI)
+      this.availableVoices.some((v) => v.voiceURI === this.selectedVoice?.voiceURI) &&
+      this.matchesVoiceLanguage(this.selectedVoice)
     ) {
       return;
     }
     if (this.availableVoices.length === 0) return;
 
-    // Filter for English voices
-    const englishVoices = this.availableVoices.filter((v) =>
-      v.lang.toLowerCase().replace('_', '-').startsWith('en')
-    );
+    // Restore the user's saved voice if it's still installed and fits the language
+    const savedName = loadPref(VOICE_NAME_STORAGE_KEY);
+    const saved = savedName
+      ? this.availableVoices.find((v) => v.name === savedName && this.matchesVoiceLanguage(v))
+      : undefined;
+    if (saved) {
+      this.selectedVoice = saved;
+      return;
+    }
+
+    // Filter for voices in the chosen language
+    const languageVoices = this.getFilteredVoices();
 
     // Prefer offline/local voices
-    const localEnglish = englishVoices.filter((v) => v.localService === true);
+    const localLanguage = languageVoices.filter((v) => v.localService === true);
     const candidatePool =
-      localEnglish.length > 0
-        ? localEnglish
-        : englishVoices.length > 0
-        ? englishVoices
+      localLanguage.length > 0
+        ? localLanguage
+        : languageVoices.length > 0
+        ? languageVoices
         : this.availableVoices;
 
     // Rank high-quality natural sounding voice profiles
@@ -257,6 +305,42 @@ export class SpeechService {
 
   public setSelectedVoice(voice: SpeechSynthesisVoice | null): void {
     this.selectedVoice = voice;
+    savePref(VOICE_NAME_STORAGE_KEY, voice ? voice.name : null);
+  }
+
+  private matchesVoiceLanguage(voice: SpeechSynthesisVoice): boolean {
+    if (this.voiceLanguage === 'all') return true;
+    const lang = normalizeLang(voice.lang);
+    return lang === this.voiceLanguage || lang.startsWith(`${this.voiceLanguage}-`);
+  }
+
+  /** Voices matching the chosen language, for the narrator voice picker. */
+  public getFilteredVoices(): SpeechSynthesisVoice[] {
+    return this.getVoices().filter((v) => this.matchesVoiceLanguage(v));
+  }
+
+  /** Distinct English locales installed on this device (e.g. en-us, en-gb), sorted. */
+  public getEnglishVoiceLocales(): string[] {
+    const locales = new Set(
+      this.getVoices()
+        .map((v) => normalizeLang(v.lang))
+        .filter((l) => l.startsWith('en-'))
+    );
+    return Array.from(locales).sort();
+  }
+
+  public getVoiceLanguage(): string {
+    return this.voiceLanguage;
+  }
+
+  /** Sets the language filter ('en', a locale like 'en-gb', or 'all') and re-picks a voice if needed. */
+  public setVoiceLanguage(lang: string): void {
+    this.voiceLanguage = lang === 'all' ? 'all' : normalizeLang(lang);
+    savePref(VOICE_LANG_STORAGE_KEY, this.voiceLanguage);
+    if (this.selectedVoice && !this.matchesVoiceLanguage(this.selectedVoice)) {
+      this.selectedVoice = null;
+    }
+    this.autoSelectPreferredVoice();
   }
 
   /**
@@ -320,17 +404,16 @@ export class SpeechService {
 
     return new Promise<void>((resolve) => {
       try {
-        const utterance = new SpeechSynthesisUtterance(cleanText);
-        if (this.selectedVoice) {
-          utterance.voice = this.selectedVoice;
-        }
-        utterance.rate = this.speechRate;
-        utterance.pitch = 1.0;
-        utterance.volume = 1.0;
-
         let isCompleted = false;
+        let hasStarted = false;
+        let retriesLeft = 1;
+        let currentUtterance: SpeechSynthesisUtterance | null = null;
 
         const cleanup = () => {
+          if (this.ttsStartTimer) {
+            clearTimeout(this.ttsStartTimer);
+            this.ttsStartTimer = null;
+          }
           if (this.ttsSafetyTimer) {
             clearTimeout(this.ttsSafetyTimer);
             this.ttsSafetyTimer = null;
@@ -340,6 +423,9 @@ export class SpeechService {
             this.ttsKeepAliveTimer = null;
           }
           this.activeUtterance = null;
+          if (this.finishActiveSpeech === finish) {
+            this.finishActiveSpeech = null;
+          }
           this.isSpeakingState = false;
           this.notifyStateChange();
 
@@ -365,55 +451,101 @@ export class SpeechService {
           resolve();
         };
 
-        utterance.onstart = () => {
+        // Safety timeout fallback, armed only once speech actually starts so a slow
+        // engine start-up doesn't eat into it. Assumes a slow ~110 words/min
+        // (1.8 words/sec * speechRate) plus an 8 second buffer (minimum 10s).
+        const wordCount = cleanText.split(/\s+/).filter(Boolean).length;
+        const estimatedSeconds = wordCount / (1.8 * this.speechRate) + 8;
+        const safetyTimeoutMs = Math.max(10000, Math.round(estimatedSeconds * 1000));
+
+        const onStarted = () => {
+          if (hasStarted || isCompleted) return;
+          hasStarted = true;
+          if (this.ttsStartTimer) {
+            clearTimeout(this.ttsStartTimer);
+            this.ttsStartTimer = null;
+          }
           this.isSpeakingState = true;
           this.notifyStateChange();
           options?.onStart?.();
-        };
 
-        utterance.onend = () => {
-          finish();
-        };
-
-        utterance.onerror = (event) => {
-          // 'canceled' and 'interrupted' are expected when user navigates or stops speech
-          if (event.error === 'canceled' || event.error === 'interrupted') {
-            finish();
-          } else {
-            fail(event);
-          }
-        };
-
-        // Safety timeout fallback:
-        // Speech rate: ~150 words/min = 2.5 words/sec * speechRate.
-        // Estimate speech duration + 4 second safety buffer (minimum 5s).
-        const wordCount = cleanText.split(/\s+/).filter(Boolean).length;
-        const estimatedSeconds = wordCount / (2.5 * this.speechRate) + 4;
-        const safetyTimeoutMs = Math.max(5000, Math.round(estimatedSeconds * 1000));
-
-        this.ttsSafetyTimer = setTimeout(() => {
-          console.warn(
-            `SpeechService: TTS safety timeout fallback fired after ${safetyTimeoutMs}ms`
-          );
-          if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+          this.ttsSafetyTimer = setTimeout(() => {
+            console.warn(
+              `SpeechService: TTS safety timeout fallback fired after ${safetyTimeoutMs}ms`
+            );
             window.speechSynthesis.cancel();
-          }
-          finish();
-        }, safetyTimeoutMs);
+            finish();
+          }, safetyTimeoutMs);
 
-        // Chrome 15s freeze workaround: Chrome pauses speech synthesis after ~15s
-        // unless briefly paused and resumed
-        this.ttsKeepAliveTimer = setInterval(() => {
-          if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-            if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
-              window.speechSynthesis.pause();
-              window.speechSynthesis.resume();
+          // Chrome desktop freezes speech synthesis after ~15s unless briefly paused and resumed
+          if (NEEDS_TTS_KEEPALIVE) {
+            this.ttsKeepAliveTimer = setInterval(() => {
+              if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
+                window.speechSynthesis.pause();
+                window.speechSynthesis.resume();
+              }
+            }, 10000);
+          }
+        };
+
+        const attempt = () => {
+          const utterance = new SpeechSynthesisUtterance(cleanText);
+          if (this.selectedVoice) {
+            utterance.voice = this.selectedVoice;
+          }
+          utterance.rate = this.speechRate;
+          utterance.pitch = 1.0;
+          utterance.volume = 1.0;
+
+          // Handlers ignore events from an utterance superseded by a retry
+          const isCurrent = () => currentUtterance === utterance;
+
+          utterance.onstart = () => {
+            if (isCurrent()) onStarted();
+          };
+
+          utterance.onend = () => {
+            if (isCurrent()) finish();
+          };
+
+          utterance.onerror = (event) => {
+            if (!isCurrent()) return;
+            // 'canceled' and 'interrupted' are expected when user navigates or stops speech
+            if (event.error === 'canceled' || event.error === 'interrupted') {
+              finish();
+            } else {
+              fail(event);
             }
-          }
-        }, 10000);
+          };
 
-        this.activeUtterance = utterance;
-        window.speechSynthesis.speak(utterance);
+          // Chrome occasionally drops an utterance queued right after cancel() and never
+          // fires onstart. Retry once, then give up so the flow doesn't hang.
+          this.ttsStartTimer = setTimeout(() => {
+            this.ttsStartTimer = null;
+            if (hasStarted || isCompleted) return;
+            if (retriesLeft > 0) {
+              retriesLeft--;
+              this.activeUtterance = null;
+              window.speechSynthesis.cancel();
+              attempt();
+            } else {
+              console.warn('SpeechService: TTS never started; giving up');
+              window.speechSynthesis.cancel();
+              finish();
+            }
+          }, TTS_START_TIMEOUT_MS);
+
+          currentUtterance = utterance;
+          this.activeUtterance = utterance;
+          window.speechSynthesis.speak(utterance);
+          // Some Chrome builds leave the queue paused after a cancel()
+          if (window.speechSynthesis.paused) {
+            window.speechSynthesis.resume();
+          }
+        };
+
+        this.finishActiveSpeech = finish;
+        attempt();
       } catch (err) {
         if (wasListeningBeforeSpeak && this.isListeningDesired) {
           this.resumeListeningAfterSpeech();
@@ -428,6 +560,10 @@ export class SpeechService {
    * Stops any ongoing TTS speech.
    */
   public stopSpeaking(): void {
+    if (this.ttsStartTimer) {
+      clearTimeout(this.ttsStartTimer);
+      this.ttsStartTimer = null;
+    }
     if (this.ttsSafetyTimer) {
       clearTimeout(this.ttsSafetyTimer);
       this.ttsSafetyTimer = null;
@@ -438,11 +574,21 @@ export class SpeechService {
     }
     this.activeUtterance = null;
 
+    // Only cancel when something is queued: a needless cancel() right before speak()
+    // makes Chrome drop the next utterance.
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       try {
-        window.speechSynthesis.cancel();
+        const synth = window.speechSynthesis;
+        if (synth.speaking || synth.pending) {
+          synth.cancel();
+        }
       } catch {}
     }
+
+    // Resolve the interrupted speak() promise even if the engine never fires an event
+    const finishInterrupted = this.finishActiveSpeech;
+    this.finishActiveSpeech = null;
+    finishInterrupted?.();
 
     if (this.isSpeakingState) {
       this.isSpeakingState = false;
@@ -988,9 +1134,11 @@ export class SpeechService {
   private pauseListeningForSpeech(): void {
     this.temporarilyPausedForSpeech = true;
     if (this.currentEngine === 'web-speech') {
+      // abort() releases the mic immediately; stop() waits to finalize, and while the
+      // recording session is open iOS ducks or stalls TTS output
       if (this.webSpeechRecognition) {
         try {
-          this.webSpeechRecognition.stop();
+          this.webSpeechRecognition.abort();
         } catch {}
       }
     }

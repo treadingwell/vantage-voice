@@ -194,8 +194,8 @@ describe('VoiceController & State Machine Integration', () => {
       expect(speech.speak).toHaveBeenCalledWith(
         expect.stringContaining('Roll 6 dice to transmit a signal to your homeworld.')
       );
-      // Continuous listening re-engaged for "Done"
-      expect(speech.startListening).toHaveBeenCalledWith(true);
+      // Repeat leaves mic state alone (speak() restores it if it was on)
+      expect(speech.startListening).not.toHaveBeenCalled();
       expect(controller.getState().mode).toBe('WAITING_FOR_DONE');
     });
 
@@ -210,8 +210,8 @@ describe('VoiceController & State Machine Integration', () => {
       expect(speech.speak).toHaveBeenCalledWith(
         expect.stringContaining('The early days of basic training finally prove useful')
       );
-      // Continuous listening re-engaged for hands-free repeats/commands
-      expect(speech.startListening).toHaveBeenCalledWith(true);
+      // Repeat doesn't turn the mic back on if the user switched it off
+      expect(speech.startListening).not.toHaveBeenCalled();
     });
 
     it('distinguishes "repeat action" vs "repeat result" when revealed', async () => {
