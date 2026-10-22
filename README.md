@@ -90,6 +90,17 @@ npm run preview
 ```
 
 ### 5. Offline Speech Models
+Narrators (opt-in downloads in Settings; all run on one CPU thread via sherpa-onnx WASM). Speed is
+generation time ÷ audio length on a desktop, for the Overpower 236 passage; phones are slower:
+
+| Narrator | Download | Speed | Misheard words* |
+|---|---|---|---|
+| Supertonic 2 (int8, 4 steps) | 94 MB | 0.25 | 3% |
+| Supertonic 3 (int8, 4 steps) | 145 MB | 0.71 | 1% |
+| Kitten Nano 0.8 (int8) | 28 MB | 0.62 | 3% |
+
+\* Share of words Kroko got wrong when transcribing the sample: a rough clarity check.
+
 The sherpa-onnx models (narrators and Kroko recognition) are served from `public/models/`, which is
 gitignored. Fetch them before previewing locally; `npm run deploy` does this automatically:
 ```bash

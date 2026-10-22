@@ -350,3 +350,20 @@ Planned features for future iterations of the Vantage Companion App:
   - Settings and mute appear in both the header and the bottom dock.
   - The recent-lookups row appears after the first lookup and shifts the keypad down once (~30 px).
   - The result card has three repeat-style controls (header *Repeat*, *Repeat Result*, *Repeat Prompt*).
+
+### 8.6 Narrator Bake-off: Supertonic 3 Added, Kokoro Removed (Oct 22, 2026)
+- Compared 10 sherpa-onnx narrators on the Overpower 236 passage (desktop, 1 CPU thread; speed = generation time ÷ audio length; misheard = Kroko transcription errors):
+
+  | Model | Size | Speed | First audio | Misheard |
+  |---|---|---|---|---|
+  | Supertonic 2 | 94 MB | 0.25 | 1.2 s | 3% |
+  | Supertonic 3 | 145 MB | 0.71 | 3.4 s | 1% |
+  | Kitten Nano 0.8 | 28 MB | 0.62 | 2.8 s | 3% |
+  | Pocket TTS int8 (non-commercial license) | 94 MB | 0.76 | 3.3 s | 6% |
+  | Inflect Micro v2 | 41 MB | 0.84 | 3.1 s | 4% |
+  | Kitten Mini 0.8 | 64 MB | 1.40 | 5.1 s | 4% |
+  | Piper Ryan / Lessac high int8 | 33 MB | 2.3–2.4 | 7–9 s | 4% |
+  | Kokoro v0.19 int8 | 103 MB | 2.79 | 9.2 s | 4% |
+- **Kokoro removed.** Kokoro v1.0 and v1.1 int8 (multi-lang) output only NaN samples in the sherpa-onnx 1.13.8 WASM build, so the narrator played silence. v0.19 works but is ~2.8× slower than playback. The app now deletes cached files of models no longer in the catalog on startup (`pruneRemovedModels()`), and a saved `kokoro-v1` narrator falls back to the phone voice.
+- **Supertonic 3 added** (`supertonic-3`): same v2-compatible files and 10 voice styles, 4 flow steps, `lang: 'en'`. No file exceeds GitHub Pages' 100 MB limit (largest 78 MB).
+- Lesson: when checking a narrator, verify the samples (peak, NaN), not just that playback ran.

@@ -9,7 +9,7 @@ import {
 import { VoiceController } from './voiceController';
 
 /** Downloadable models shown in settings: the Vosk pack plus the sherpa catalog entries. */
-type ModelKey = 'vosk' | 'kroko-en' | 'kitten-nano' | 'supertonic-2';
+type ModelKey = 'vosk' | 'kroko-en' | 'kitten-nano' | 'supertonic-2' | 'supertonic-3';
 
 type ModelStatus = 'checking' | 'missing' | 'ready';
 
@@ -56,8 +56,14 @@ const TTS_OPTIONS: EngineOption<TtsEngineMode>[] = [
   {
     value: 'supertonic-2',
     title: 'Supertonic 2',
-    desc: 'Most natural and fastest offline narrator. 10 voices.',
+    desc: 'Fastest natural offline narrator. 10 voices.',
     model: 'supertonic-2',
+  },
+  {
+    value: 'supertonic-3',
+    title: 'Supertonic 3',
+    desc: 'Clearest reading, about 3x slower than Supertonic 2. 10 voices.',
+    model: 'supertonic-3',
   },
   {
     value: 'kitten-nano',
@@ -79,6 +85,7 @@ export class SettingsModal {
     'kroko-en': 'checking',
     'kitten-nano': 'checking',
     'supertonic-2': 'checking',
+    'supertonic-3': 'checking',
   };
   private downloads: Partial<Record<ModelKey, DownloadProgress>> = {};
   private errorMessage = '';
@@ -138,7 +145,7 @@ export class SettingsModal {
   }
 
   private async refreshModelStatus(): Promise<void> {
-    const keys: ModelKey[] = ['vosk', 'kroko-en', 'kitten-nano', 'supertonic-2'];
+    const keys: ModelKey[] = ['vosk', 'kroko-en', 'kitten-nano', 'supertonic-2', 'supertonic-3'];
     for (const key of keys) {
       if (key === 'vosk') {
         this.modelStatus.vosk = (await this.speech.isOfflineModelCached()) ? 'ready' : 'missing';

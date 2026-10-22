@@ -47,13 +47,47 @@
       "id": "supertonic-2",
       "kind": "tts",
       "label": "Supertonic 2",
-      "description": "Most natural and fastest. 10 voices.",
+      "description": "Fastest natural voice. 10 voices.",
       "dir": "supertonic-2-int8",
       "approxMB": 94,
       "source": {
         "type": "tar",
         "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-supertonic-tts-int8-2026-03-06.tar.bz2",
         "root": "sherpa-onnx-supertonic-tts-int8-2026-03-06"
+      },
+      "files": [
+        "duration_predictor.int8.onnx",
+        "text_encoder.int8.onnx",
+        "vector_estimator.int8.onnx",
+        "vocoder.int8.onnx",
+        "tts.json",
+        "unicode_indexer.bin",
+        "voice.bin"
+      ],
+      "voices": [
+        { "sid": 0, "label": "Voice 1 (high)" },
+        { "sid": 1, "label": "Voice 2 (high)" },
+        { "sid": 2, "label": "Voice 3 (medium)" },
+        { "sid": 3, "label": "Voice 4 (high)" },
+        { "sid": 4, "label": "Voice 5 (medium)" },
+        { "sid": 5, "label": "Voice 6 (medium)" },
+        { "sid": 6, "label": "Voice 7 (deep)" },
+        { "sid": 7, "label": "Voice 8 (deep)" },
+        { "sid": 8, "label": "Voice 9 (deep)" },
+        { "sid": 9, "label": "Voice 10 (deep)" }
+      ]
+    },
+    {
+      "id": "supertonic-3",
+      "kind": "tts",
+      "label": "Supertonic 3",
+      "description": "Clearest reading, about 3x slower than Supertonic 2. 10 voices.",
+      "dir": "supertonic-3-int8",
+      "approxMB": 145,
+      "source": {
+        "type": "tar",
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-supertonic-3-tts-int8-2026-05-11.tar.bz2",
+        "root": "sherpa-onnx-supertonic-3-tts-int8-2026-05-11"
       },
       "files": [
         "duration_predictor.int8.onnx",

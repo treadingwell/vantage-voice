@@ -38,6 +38,7 @@ let micSampleRate = ASR_SAMPLE_RATE;
 const TTS_GENERATION_DEFAULTS: Record<string, Record<string, unknown>> = {
   // 4 flow steps: chosen by ear over 3 (slips more words) and 5 (slower on phones)
   'supertonic-2': { numSteps: 4, extra: { lang: 'en' } },
+  'supertonic-3': { numSteps: 4, extra: { lang: 'en' } },
 };
 
 function post(msg: SherpaWorkerMessage, transfer: Transferable[] = []): void {
@@ -119,6 +120,7 @@ function ttsModelConfig(model: ModelEntry, dir: string): Record<string, unknown>
         },
       };
     case 'supertonic-2':
+    case 'supertonic-3':
       return {
         supertonic: {
           durationPredictor: `${dir}/duration_predictor.int8.onnx`,

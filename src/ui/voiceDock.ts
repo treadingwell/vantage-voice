@@ -10,11 +10,12 @@ const STT_BADGES: Record<SttEngineMode, string> = {
 
 const NARRATOR_LABELS: Record<TtsEngineMode, string> = {
   native: 'Phone voice',
-  'supertonic-2': 'Supertonic',
+  'supertonic-2': 'Supertonic 2',
+  'supertonic-3': 'Supertonic 3',
   'kitten-nano': 'Kitten',
 };
 
-const NARRATOR_ORDER: TtsEngineMode[] = ['native', 'supertonic-2', 'kitten-nano'];
+const NARRATOR_ORDER: TtsEngineMode[] = ['native', 'supertonic-2', 'supertonic-3', 'kitten-nano'];
 
 export class VoiceDock {
   private container: HTMLElement;

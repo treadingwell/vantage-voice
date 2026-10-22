@@ -148,6 +148,26 @@ export async function deleteModel(entry: ModelEntry, baseUrl = defaultModelsBase
   }
 }
 
+/**
+ * Deletes cached files of models that are no longer in the catalog (a narrator removed
+ * in an update), so they don't keep taking up storage. Returns how many were removed.
+ */
+export async function pruneRemovedModels(baseUrl = defaultModelsBaseUrl()): Promise<number> {
+  const cache = await openCache();
+  if (!cache) return 0;
+  const knownDirs = new Set([SHERPA_RUNTIME.dir, ...SHERPA_MODELS.map((m) => m.dir)]);
+  let removed = 0;
+  for (const request of await cache.keys()) {
+    if (!request.url.startsWith(baseUrl)) continue;
+    const dir = request.url.slice(baseUrl.length).split('/')[0];
+    if (!knownDirs.has(dir)) {
+      await cache.delete(request);
+      removed++;
+    }
+  }
+  return removed;
+}
+
 /** Reads a cached model file, falling back to the network (e.g. during development). */
 export async function readModelFile(url: string): Promise<Uint8Array> {
   const cache = await openCache();

@@ -7,6 +7,7 @@ import {
   getModel,
   isModelDownloaded,
   modelFileUrl,
+  pruneRemovedModels,
   readModelFile,
 } from '../../src/speech/models/modelStore';
 
@@ -20,7 +21,8 @@ function installFakeCaches(): Map<string, Response> {
     put: async (url: string, res: Response) => {
       store.set(url, res);
     },
-    delete: async (url: string) => store.delete(url),
+    delete: async (req: string | Request) => store.delete(typeof req === 'string' ? req : req.url),
+    keys: async () => [...store.keys()].map((url) => new Request(url)),
   };
   vi.stubGlobal('caches', { open: async () => cache });
   return store;
@@ -47,9 +49,11 @@ describe('modelStore', () => {
     vi.unstubAllGlobals();
   });
 
-  it('catalog has the three shipped models', () => {
+  it('catalog has the shipped models', () => {
     expect(getModel('kitten-nano')?.kind).toBe('tts');
     expect(getModel('supertonic-2')?.kind).toBe('tts');
+    expect(getModel('supertonic-3')?.kind).toBe('tts');
+    expect(getModel('kokoro-v1')).toBeUndefined();
     expect(getModel('kroko-en')?.kind).toBe('stt');
     expect(getModel('nope')).toBeUndefined();
   });
@@ -103,6 +107,19 @@ describe('modelStore', () => {
     fetchMock.mockResolvedValueOnce(new Response('', { status: 404 }));
     const model = getModel('kitten-nano')!;
     await expect(downloadModel(model, undefined, BASE)).rejects.toThrow(`Download failed (404) for ${model.files[0].split('/').pop()}`);
+  });
+
+  it('deletes leftover files of models removed from the catalog', async () => {
+    const kitten = getModel('kitten-nano')!;
+    await downloadModel(kitten, undefined, BASE);
+    const removedUrl = `${BASE}kokoro-int8-v1_0/model.int8.onnx`;
+    store.set(removedUrl, new Response('x'));
+    store.set('https://elsewhere.test/models/kokoro-int8-v1_0/x', new Response('x'));
+
+    expect(await pruneRemovedModels(BASE)).toBe(1);
+    expect(store.has(removedUrl)).toBe(false);
+    expect(store.has('https://elsewhere.test/models/kokoro-int8-v1_0/x')).toBe(true);
+    expect(await isModelDownloaded(kitten, BASE)).toBe(true);
   });
 
   it('reads cached files without touching the network', async () => {
