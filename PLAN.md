@@ -334,3 +334,19 @@ Planned features for future iterations of the Vantage Companion App:
   - Story text game-term icons: Added theme fills (health = red, morale = gold `#fbbf24`, time = cyan, boost = light blue).
 
 
+
+### 8.5 Audit & Test Pass (Oct 22, 2026)
+- **Fixes**:
+  - The dock status line now refreshes when speech starts/stops, so it reads *"Reading aloud..."* during playback instead of a stale *"Roll dice! Say Done"*.
+  - Saying *"Continue"* / *"Next"* on a regular (non-sequential) branch is ignored instead of silently picking Option 1.
+- **Cleanup**:
+  - `setAudioSessionType()` in `speechService.ts` replaces five copies of the Safari Audio Session block.
+  - Loudness levelling is the pure `normalizeSpeechLoudness()` in `neuralNarrator.ts` (target speech RMS 0.12 ≈ −18 dBFS, gain cap 2.5×, peak guard 0.92); the unity `GainNode` it used to route through was removed.
+  - `parseCost()` in `storyDb.ts` replaces a nested ternary (dataset costs: numbers, `"X"`, one `"4"` string).
+  - `settleAudioHardware()` skips its delay via `import.meta.env.MODE === 'test'` instead of reading `process.env` in browser code.
+  - Removed duplicate 🔁 emoji next to the SVG icons on the Repeat buttons.
+- **New tests** (100 → 120): `tests/speech/loudness.test.ts`, `tests/speech/modelStore.test.ts` (download/progress, shared-runtime delete rules, 404 errors, cache reads), `tests/data/parseCost.test.ts`, and controller tests for the status line, "continue" on regular branches, and "done" to stop a branch.
+- **Open design notes** (not changed):
+  - Settings and mute appear in both the header and the bottom dock.
+  - The recent-lookups row appears after the first lookup and shifts the keypad down once (~30 px).
+  - The result card has three repeat-style controls (header *Repeat*, *Repeat Result*, *Repeat Prompt*).

@@ -204,14 +204,14 @@ export class StoryView {
                     <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
                     <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
                   </svg>
-                  <span>🔁 Repeat Result</span>
+                  <span>Repeat Result</span>
                 </button>
                 <button type="button" class="btn-audio-action" id="btn-replay-prompt-post" title="Repeat Pre-Done Prompt">
                   <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
                     <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
                     <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
                   </svg>
-                  <span>🔁 Repeat Prompt</span>
+                  <span>Repeat Prompt</span>
                 </button>
                 <button type="button" class="btn-audio-action btn-audio-stop" id="btn-stop-audio" title="Stop Audio">
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">

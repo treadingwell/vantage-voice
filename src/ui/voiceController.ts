@@ -151,6 +151,8 @@ export class VoiceController {
       }
 
       if (stateChanged) {
+        // The status line depends on whether speech is playing ("Reading aloud...")
+        this.updateStatusMessage();
         this.notify();
       }
     });
@@ -561,7 +563,7 @@ export class VoiceController {
   // --- Step 1 & 2: Lookup and Disambiguation Flow ---
 
   private async settleAudioHardware(ms = 60): Promise<void> {
-    if (typeof window === 'undefined' || (typeof process !== 'undefined' && process.env.NODE_ENV === 'test')) {
+    if (typeof window === 'undefined' || import.meta.env.MODE === 'test') {
       return;
     }
     await new Promise((r) => setTimeout(r, ms));
@@ -729,7 +731,10 @@ export class VoiceController {
   public async selectBranchChoice(choiceIndex: number): Promise<void> {
     await this.unlockAudio();
 
+    // A negative index means "continue", which only applies to sequential results;
+    // on a regular branch it would silently pick option 1
     if (choiceIndex < 0) {
+      if (!this.parsedResultCache?.isSequential) return;
       choiceIndex = this.state.chosenBranchIndex !== null ? this.state.chosenBranchIndex + 1 : 0;
     }
 

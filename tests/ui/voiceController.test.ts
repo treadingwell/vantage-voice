@@ -42,6 +42,19 @@ describe('VoiceController & State Machine Integration', () => {
     expect(state.isObscured).toBe(true);
   });
 
+  it('shows "Reading aloud..." while speech plays and restores the mode prompt after', async () => {
+    controller.setHandsFreeMode(false);
+    await controller.executeLookup(db.getByKey('e236')!, null);
+    const notifySpeaking = (isSpeaking: boolean) =>
+      (speech as unknown as { notifyStateChange(o: object): void }).notifyStateChange({ isSpeaking });
+
+    notifySpeaking(true);
+    expect(controller.getState().statusMessage).toBe('Reading aloud...');
+
+    notifySpeaking(false);
+    expect(controller.getState().statusMessage).toContain('Say "Done"');
+  });
+
   describe('Hands-free setting controls automatic listening', () => {
     it('hands-free off + tapped lookup: never turns the mic on by itself', async () => {
       controller.setHandsFreeMode(false);
@@ -444,6 +457,26 @@ describe('VoiceController & State Machine Integration', () => {
       // 4. "card 236"
       await controller.handleTranscript('card 236', true);
       expect(controller.getState().mode).toBe('DISAMBIGUATING');
+    });
+
+    it('ignores "continue" on a regular (non-sequential) branch instead of picking option 1', async () => {
+      await controller.handleTranscript('stun on 236', true);
+      await controller.handleTranscript('ready', true);
+      expect(controller.getState().mode).toBe('BRANCHING_CHOICE');
+
+      await controller.handleTranscript('continue', true);
+      expect(controller.getState().chosenBranchIndex).toBeNull();
+      expect(controller.getState().mode).toBe('BRANCHING_CHOICE');
+    });
+
+    it('says "done" on a regular branch to stop without choosing', async () => {
+      controller.setHandsFreeMode(false);
+      await controller.handleTranscript('stun on 236', true);
+      await controller.handleTranscript('ready', true);
+
+      await controller.handleTranscript('done', true);
+      expect(controller.getState().chosenBranchIndex).toBeNull();
+      expect(controller.getState().mode).toBe('IDLE');
     });
 
     it('handles sequential progressive choices with "continue" and "done" on o235', async () => {

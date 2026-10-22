@@ -117,6 +117,16 @@ const NOISE_WORDS = new Set([
   'open',
 ]);
 
+/** Dice cost from the dataset: a number, "X" (any number of dice), or null. */
+export function parseCost(raw: unknown): number | 'X' | null {
+  if (raw === undefined || raw === null) return null;
+  if (typeof raw === 'number') return raw;
+  const text = String(raw).trim();
+  if (text.toUpperCase() === 'X') return 'X';
+  const n = parseInt(text, 10);
+  return isNaN(n) ? null : n;
+}
+
 export class StoryDatabase {
   private byKey = new Map<string, StoryLookupResult>();
   private byNumber = new Map<number, StoryLookupResult[]>();
@@ -166,16 +176,7 @@ export class StoryDatabase {
           option: raw.option ?? null,
           direction: raw.direction ?? null,
           region: raw.region ?? null,
-          cost:
-            raw.cost !== undefined && raw.cost !== null
-              ? typeof raw.cost === 'string' && raw.cost.trim().toUpperCase() === 'X'
-                ? 'X'
-                : typeof raw.cost === 'number'
-                ? raw.cost
-                : !isNaN(parseInt(String(raw.cost), 10))
-                ? parseInt(String(raw.cost), 10)
-                : raw.cost
-              : null,
+          cost: parseCost(raw.cost),
           actionHtml,
           actionPlain,
           primaryVerb: primary,

@@ -65,6 +65,38 @@ function splitRaw(text: string): string[] {
   return chunks;
 }
 
+// Loudness levelling: Kitten and Supertonic come out at different volumes, and so do
+// short prompts vs long results. Measured on speech only (silence would drag RMS down).
+const SPEECH_FLOOR = 0.01;
+const TARGET_SPEECH_RMS = 0.12;
+const MAX_GAIN = 2.5;
+const MAX_PEAK = 0.92;
+
+/** Returns a copy of `samples` scaled to a common speech loudness, without clipping. */
+export function normalizeSpeechLoudness(samples: Float32Array): Float32Array<ArrayBuffer> {
+  const out = new Float32Array(samples);
+  let sumSq = 0;
+  let speechSamples = 0;
+  let peak = 0;
+  for (const v of out) {
+    const abs = Math.abs(v);
+    if (abs > peak) peak = abs;
+    if (abs > SPEECH_FLOOR) {
+      sumSq += abs * abs;
+      speechSamples++;
+    }
+  }
+  const speechRms = speechSamples > 0 ? Math.sqrt(sumSq / speechSamples) : 0;
+  if (speechRms <= 0.005) return out;
+
+  let gain = Math.min(TARGET_SPEECH_RMS / speechRms, MAX_GAIN);
+  if (peak * gain > MAX_PEAK) gain = MAX_PEAK / peak;
+  if (Math.abs(gain - 1) > 0.01) {
+    for (let i = 0; i < out.length; i++) out[i] *= gain;
+  }
+  return out;
+}
+
 export interface NarrateOptions {
   sid: number;
   speed: number;
@@ -82,7 +114,6 @@ export class NeuralNarrator {
   private getAudioContext: () => AudioContext | null;
   private generation = 0;
   private activeSource: AudioBufferSourceNode | null = null;
-  private masterGainNode: GainNode | null = null;
   private wake: (() => void) | null = null;
 
   constructor(client: SherpaClient, getAudioContext: () => AudioContext | null) {
@@ -140,63 +171,14 @@ export class NeuralNarrator {
     this.wake = null;
   }
 
-  private getAudioChain(ctx: AudioContext): AudioNode {
-    if (!this.masterGainNode || (this.masterGainNode as unknown as { context?: AudioContext }).context !== ctx) {
-      try {
-        const gain = ctx.createGain();
-        gain.gain.value = 1.0;
-        gain.connect(ctx.destination);
-        this.masterGainNode = gain;
-      } catch {
-        return ctx.destination;
-      }
-    }
-    return this.masterGainNode ?? ctx.destination;
-  }
-
   private play(ctx: AudioContext, audio: GeneratedSpeech): Promise<void> {
     return new Promise((resolve) => {
-      const samples = new Float32Array(audio.samples);
-      // Normalize chunk volume using Speech RMS so every reading (both Kitten and Supertonic,
-      // options prompts, dice prompts, and story results) plays at the exact same, balanced loudness.
-      let sumSq = 0;
-      let nonSilent = 0;
-      for (let i = 0; i < samples.length; i++) {
-        const abs = Math.abs(samples[i]);
-        if (abs > 0.01) {
-          sumSq += abs * abs;
-          nonSilent++;
-        }
-      }
-      const speechRms = nonSilent > 0 ? Math.sqrt(sumSq / nonSilent) : 0;
-      if (speechRms > 0.005) {
-        // Target 0.12 speech RMS: standard, comfortable listening level matching natural Kitten delivery
-        const targetRms = 0.12;
-        let gain = Math.min(targetRms / speechRms, 2.5);
-
-        // Guard against peak clipping
-        let maxPeak = 0;
-        for (let i = 0; i < samples.length; i++) {
-          const p = Math.abs(samples[i]) * gain;
-          if (p > maxPeak) maxPeak = p;
-        }
-        if (maxPeak > 0.92) {
-          gain *= 0.92 / maxPeak;
-        }
-
-        if (Math.abs(gain - 1.0) > 0.01) {
-          for (let i = 0; i < samples.length; i++) {
-            samples[i] *= gain;
-          }
-        }
-      }
-
+      const samples = normalizeSpeechLoudness(audio.samples);
       const buffer = ctx.createBuffer(1, samples.length, audio.sampleRate);
       buffer.copyToChannel(samples, 0);
       const source = ctx.createBufferSource();
       source.buffer = buffer;
-      const target = this.getAudioChain(ctx);
-      source.connect(target);
+      source.connect(ctx.destination);
       const done = () => {
         if (this.activeSource === source) this.activeSource = null;
         if (this.wake === done) this.wake = null;

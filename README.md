@@ -80,7 +80,7 @@ npm run dev
 ### 3. Run Unit Tests & Typecheck
 ```bash
 npm run typecheck
-npm test
+npm test   # 120 tests (vitest + jsdom)
 ```
 
 ### 4. Build Offline Production PWA

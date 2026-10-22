@@ -120,6 +120,21 @@ function getSpeechRecognitionClass(): { new (): ISpeechRecognition } | null {
   return w.SpeechRecognition || w.webkitSpeechRecognition || null;
 }
 
+/**
+ * Safari's Audio Session API: "playback" while speaking keeps iOS from treating the app
+ * as a voice call (which ducks the speaker); "play-and-record" while the mic is open.
+ */
+function setAudioSessionType(type: 'playback' | 'play-and-record'): void {
+  const session = (globalThis.navigator as unknown as { audioSession?: { type: string } } | undefined)
+    ?.audioSession;
+  if (!session) return;
+  try {
+    session.type = type;
+  } catch {
+    // Unsupported value on this browser
+  }
+}
+
 export class SpeechService {
   // TTS State
   private speechRate = 1.0; // Clamped between 0.8 and 1.4
@@ -468,11 +483,7 @@ export class SpeechService {
    * (including a safety timeout fallback in case mobile browser onend doesn't fire).
    */
   public speak(text: string, options?: SpeakOptions): Promise<void> {
-    if (typeof navigator !== 'undefined' && 'audioSession' in navigator) {
-      try {
-        (navigator as unknown as { audioSession?: { type: string } }).audioSession!.type = 'playback';
-      } catch {}
-    }
+    setAudioSessionType('playback');
 
     // Cancel any ongoing speech
     this.stopSpeaking();
@@ -1061,11 +1072,7 @@ export class SpeechService {
     this.continuousListening = continuous;
     this.temporarilyPausedForSpeech = false;
 
-    if (typeof navigator !== 'undefined' && 'audioSession' in navigator) {
-      try {
-        (navigator as unknown as { audioSession?: { type: string } }).audioSession!.type = 'play-and-record';
-      } catch {}
-    }
+    setAudioSessionType('play-and-record');
 
     await this.unlockAudio();
 
@@ -1090,11 +1097,7 @@ export class SpeechService {
     this.continuousListening = false;
     this.temporarilyPausedForSpeech = false;
 
-    if (typeof navigator !== 'undefined' && 'audioSession' in navigator) {
-      try {
-        (navigator as unknown as { audioSession?: { type: string } }).audioSession!.type = 'playback';
-      } catch {}
-    }
+    setAudioSessionType('playback');
 
     if (this.webSpeechRestartTimer) {
       clearTimeout(this.webSpeechRestartTimer);
@@ -1470,11 +1473,7 @@ export class SpeechService {
     this.temporarilyPausedForSpeech = true;
 
     // Signal OS to exit communication mode and restore media playback priority
-    if (typeof navigator !== 'undefined' && 'audioSession' in navigator) {
-      try {
-        (navigator as unknown as { audioSession?: { type: string } }).audioSession!.type = 'playback';
-      } catch {}
-    }
+    setAudioSessionType('playback');
 
     if (this.currentEngine === 'web-speech') {
       // abort() releases the mic immediately; stop() waits to finalize, and while the
@@ -1495,11 +1494,7 @@ export class SpeechService {
   private async resumeListeningAfterSpeech(): Promise<void> {
     this.temporarilyPausedForSpeech = false;
     if (this.isListeningDesired && !this.isSpeakingState) {
-      if (typeof navigator !== 'undefined' && 'audioSession' in navigator) {
-        try {
-          (navigator as unknown as { audioSession?: { type: string } }).audioSession!.type = 'play-and-record';
-        } catch {}
-      }
+      setAudioSessionType('play-and-record');
 
       if (this.currentEngine === 'web-speech') {
         this.startWebSpeech();
