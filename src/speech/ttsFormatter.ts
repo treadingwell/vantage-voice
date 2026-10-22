@@ -29,6 +29,9 @@ export function htmlToSpeechText(html: string): string {
     text = text.replace(/\b([a-zA-Z]+)\/([a-zA-Z]+)\b/g, '$1 or $2');
   }
 
+  // Block ends become sentence ends, so list items and lines don't run together
+  text = text.replace(/([^.!?:;\s>])(\s*)(<\/(?:li|p|div|h[1-6]|tr)>|<br\s*\/?>)/gi, '$1.$2$3');
+
   // Remove all other HTML tags
   text = text.replace(/<[^>]+>/g, ' ');
 
@@ -51,11 +54,150 @@ export function htmlToSpeechText(html: string): string {
   text = text.replace(/[\u2018\u2019]/g, "'");
   text = text.replace(/[\u201C\u201D]/g, '"');
 
+  // Slashes between words that were wrapped in tags: "move</span>/<span>look" -> "move or look"
+  text = text.replace(/\b([a-zA-Z]+)\s*\/\s*([a-zA-Z]+)\b/g, '$1 or $2');
+
   // Normalize whitespace
   text = text.replace(/\s+/g, ' ').trim();
 
   // Normalize spaces before punctuation
   text = text.replace(/\s+([.,;:!?])/g, '$1');
+
+  return text;
+}
+
+// ---------------------------------------------------------------------------
+// Spoken-text normalization
+// ---------------------------------------------------------------------------
+
+const ONES = [
+  'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
+  'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen',
+];
+const TENS = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+
+const DIRECTION_WORDS: Record<string, string> = {
+  N: 'north', S: 'south', E: 'east', W: 'west',
+  NE: 'northeast', NW: 'northwest', SE: 'southeast', SW: 'southwest',
+};
+
+function underHundred(n: number): string {
+  if (n < 20) return ONES[n];
+  return TENS[Math.floor(n / 10)] + (n % 10 ? ` ${ONES[n % 10]}` : '');
+}
+
+function cardinal(n: number): string {
+  if (n < 100) return underHundred(n);
+  if (n < 1000) {
+    const rest = n % 100;
+    return `${ONES[Math.floor(n / 100)]} hundred${rest ? ` ${underHundred(rest)}` : ''}`;
+  }
+  if (n < 1_000_000) {
+    const rest = n % 1000;
+    return `${cardinal(Math.floor(n / 1000))} thousand${rest ? ` ${cardinal(rest)}` : ''}`;
+  }
+  return String(n).split('').map((d) => ONES[Number(d)]).join(' ');
+}
+
+/** Two-digit chunk read the way people say room numbers: 4 -> "oh four", 39 -> "thirty nine". */
+function pairChunk(n: number): string {
+  return n < 10 ? `oh ${ONES[n]}` : underHundred(n);
+}
+
+/**
+ * Reads a number the way Vantage players say it. Location and card numbers (100-9999) are
+ * read in pairs ("236" -> "two thirty six", "1255" -> "twelve fifty five"); smaller
+ * quantities and round hundreds/thousands are read normally.
+ */
+export function numberToWords(digits: string): string {
+  if (/^0+$/.test(digits)) return digits.split('').map(() => 'zero').join(' ');
+  const n = parseInt(digits, 10);
+  if (n < 100) return underHundred(n);
+  if (n < 10000) {
+    if (n % 1000 === 0) return cardinal(n);
+    if (n % 100 === 0) return n < 1000 ? cardinal(n) : `${underHundred(n / 100)} hundred`;
+    const head = Math.floor(n / 100);
+    return `${n < 1000 ? ONES[head] : underHundred(head)} ${pairChunk(n % 100)}`;
+  }
+  return cardinal(n);
+}
+
+const ORDINAL_LAST_WORD: Record<string, string> = {
+  one: 'first', two: 'second', three: 'third', five: 'fifth', eight: 'eighth',
+  nine: 'ninth', twelve: 'twelfth',
+};
+
+/** "322" -> "three twenty second" */
+function ordinalWords(digits: string): string {
+  const words = numberToWords(digits).split(' ');
+  const last = words.pop()!;
+  const ordinal =
+    ORDINAL_LAST_WORD[last] ?? (last.endsWith('y') ? `${last.slice(0, -1)}ieth` : `${last}th`);
+  return [...words, ordinal].join(' ');
+}
+
+/**
+ * Rewrites text so every narrator can read it cleanly: numbers and symbols become words,
+ * ALL-CAPS action verbs become normal words (some voices spell caps letter by letter),
+ * and every sentence ends with punctuation so it gets a natural pause. Neural voices like
+ * Supertonic read raw characters and garble digits, so this matters most for them.
+ */
+export function normalizeForSpeech(input: string): string {
+  let text = input;
+
+  // Region codes: "SE-2" -> "southeast two"
+  text = text.replace(/\b(NE|NW|SE|SW|N|S|E|W)-(\d+)\b/g, (_, dir: string, num: string) => `${DIRECTION_WORDS[dir]} ${numberToWords(num)}`);
+
+  // Currency: "$1" -> "1 coin", "$15" -> "15 coins", "$X" -> "X coins"
+  text = text
+    .replace(/\$1\b/g, '1 coin')
+    .replace(/\$(\d+)\b/g, '$1 coins')
+    .replace(/\$([A-Z])\b/g, '$1 coins');
+
+  text = text
+    .replace(/\bvs\.\s/gi, 'versus ')
+    .replace(/\be\.g\.,?\s/gi, 'for example, ')
+    .replace(/\bi\.e\.,?\s/gi, 'that is, ');
+
+  // Grid sizes and coordinates: "3x3" -> "3 by 3", "A1" -> "A 1"
+  text = text.replace(/\b(\d+)x(\d+)\b/g, '$1 by $2');
+  text = text.replace(/\b([A-Z])(\d)\b/g, '$1 $2');
+  // Plural digits: "1s and 0s" -> "ones and zeros"
+  text = text.replace(/\b(\d+)s\b/g, (_, n: string) => (n === '0' ? 'zeros' : `${numberToWords(n)}s`));
+  text = text.replace(/&/g, ' and ');
+
+  // Slashes: "move / look" -> "move or look"
+  text = text.replace(/\s*\/\s*/g, ' or ');
+
+  // Parentheses and brackets become comma pauses: "look (061);" -> "look, 061;"
+  text = text.replace(/\s*[([]\s*/g, ', ').replace(/\s*[)\]]\s*/g, ', ');
+
+  // ALL-CAPS words (action verbs) -> lowercase
+  text = text.replace(/\b[A-Z]{2,}\b/g, (w) => w.toLowerCase());
+
+  // Ordinals and decimals before plain numbers
+  text = text.replace(/\b(\d+)(?:st|nd|rd|th)\b/g, (_, n: string) => ordinalWords(n));
+  text = text.replace(/\b(\d+)\.(\d+)\b/g, (_, a: string, b: string) => `${numberToWords(a)} point ${b.split('').map((d) => ONES[Number(d)]).join(' ')}`);
+  // Thousands separators: "1,000" -> "1000"
+  text = text.replace(/\b(\d{1,3}),(\d{3})\b/g, '$1$2');
+  text = text.replace(/\b\d+\b/g, (d) => numberToWords(d));
+
+  // Hyphen-number ranges or stray symbols that voices read literally
+  text = text.replace(/[#*@%+=_{}|~^<>\\]/g, ' ');
+
+  // Tidy punctuation produced above
+  text = text
+    .replace(/\s+/g, ' ')
+    .replace(/\s+([.,;:!?])/g, '$1')
+    .replace(/,\s*([.,;:!?])/g, '$1')
+    .replace(/([;:!?.])\s*,/g, '$1')
+    .replace(/^[\s,]+/, '')
+    .trim();
+
+  // Every utterance ends with punctuation so neural voices pause instead of trailing off
+  if (text && !/[.!?]["'”’)]*$/.test(text)) {
+    text = `${text.replace(/[,;:\s]+$/, '')}.`;
+  }
 
   return text;
 }
@@ -178,6 +320,6 @@ export function formatDisambiguationPrompt(result: StoryLookupResult): string {
 
 export function formatBranchChoicesPrompt(choices: ParsedBranchChoice[]): string {
   if (!choices || choices.length === 0) return '';
-  const parts = choices.map((c) => `Option ${c.index + 1}: ${c.summary}.`);
+  const parts = choices.map((c) => `Option ${c.index + 1}: ${c.summary.replace(/[.!?]+$/, '')}.`);
   return `${parts.join(' ')} Which do you choose?`;
 }

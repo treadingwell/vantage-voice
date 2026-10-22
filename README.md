@@ -15,9 +15,11 @@ Inspired by [vantage.rulepop.com/#story-lookup](https://vantage.rulepop.com/#sto
   1. **Action & Dice Cost Phase**: Displays the action while keeping the outcome **blurred** (`obscured`), and reads aloud: *"Roll 6 dice to transmit a signal to your homeworld."*
   2. **Wait for "Done"**: Automatically listens for you to say **"Done"** (or tap the **✓ DONE** button) after rolling and resolving your dice.
   3. **Outcome & Branching Choices**: Unblurs and reads the outcome aloud. If the result contains branching choices (e.g., *Overpower 236: "Let them live" / "Finish them"*), reads the option titles and waits for you to speak or tap your choice before revealing that specific branch.
-- **Dual-Engine Local Speech Recognition (Camping / Airplane Mode Ready)**:
+- **Local Speech Recognition (Camping / Airplane Mode Ready)**, chosen in **Settings (⚙️)**:
   - **Browser Native STT (`Web Speech API`)**: Zero-download voice recognition using the device's OS recognizer.
-  - **Offline WASM STT (`vosk-browser`)**: One-tap download in **Settings (⚙️)** caches the compact (~40 MB) English speech model in `CacheStorage` (`vantage-vosk-model-cache-v1`) and constrains recognition to the exact vocabulary of *Vantage* (~1,350 words), enabling **100% offline recognition in Airplane Mode** and silent continuous listening while you roll dice.
+  - **Vosk (offline, ~40 MB)**: Constrained to the exact vocabulary of *Vantage* (~1,350 words).
+  - **Kroko streaming (offline, ~68 MB)**: Live word-by-word recognition via [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx); the most accurate offline option. Kroko ASR community model by Banafo, CC-BY-SA 4.0.
+- **Offline Neural Narrators**: Besides the phone's own voice, download **Supertonic 2** (~94 MB, 10 voices) or **Kitten Nano** (~28 MB, 8 voices). Switch narrators from the voice dock pill; adjust speed and the pause between sentences in Settings. Every downloaded model can be deleted again from Settings.
 - **Rulepop-Style Keypad & Quick Action Preview**:
   - Full 8-storybook icon selector (`Move`, `Look`, `Engage`, `Help`, `Take`, `Overpower`, `Depart`, `Secret`) and `0–9` numpad.
   - Enter any location number (like `236`) to see instant preview chips of all actions available at that location.
@@ -74,6 +76,24 @@ npm run build
 npm run preview
 ```
 
+### 5. Offline Speech Models
+The sherpa-onnx models (narrators and Kroko recognition) are served from `public/models/`, which is
+gitignored. Fetch them before previewing locally; `npm run deploy` does this automatically:
+```bash
+npm run fetch-models
+```
+
+The browser build of sherpa-onnx in `src/vendor/sherpa/` is generated from the pinned npm package.
+Regenerate it after upgrading `sherpa-onnx`:
+```bash
+npm run vendor-sherpa
+```
+
+To check how story text will sound before it reaches a narrator (numbers, symbols, punctuation):
+```bash
+npx vite-node scripts/audit-speech.ts
+```
+
 ---
 
 ## 📱 Installing on Android & iOS (Offline / Camping Mode)
@@ -81,4 +101,4 @@ npm run preview
 1. Open the hosted app in **Safari (iOS)** or **Chrome (Android)**.
 2. Tap **Share $\rightarrow$ Add to Home Screen** (iOS) or **Install App** (Android).
 3. Wait a few seconds on first launch for the Service Worker to precache the 6,262 story entries and figure images.
-4. *(Optional — For Airplane Mode / Camping)*: Tap the **⚙️ Settings** icon in the bottom voice dock and click **Download Offline Voice Pack (~40 MB)** to cache the in-browser WebAssembly speech recognizer locally.
+4. *(Optional — For Airplane Mode / Camping)*: Tap the **⚙️ Settings** icon in the bottom voice dock and download an offline recognizer (Vosk or Kroko) and, if you like, a neural narrator (Supertonic or Kitten).

@@ -36,3 +36,12 @@ lerna-debug.log*
 # Temp / scratch files
 tmp/
 .temp/
+
+# Claude Code personal settings
+.claude/settings.local.json
+
+# Local TTS comparison samples
+tts-samples/
+
+# Offline speech models, fetched by scripts/fetch-models.mjs at deploy time
+public/models/

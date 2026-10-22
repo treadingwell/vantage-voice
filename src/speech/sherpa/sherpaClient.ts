@@ -1,0 +1,107 @@
+import { defaultModelsBaseUrl } from '../models/modelStore';
+import type { GeneratedSpeech, SherpaRequest, SherpaWorkerMessage } from './sherpaProtocol';
+
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
+type RpcRequest = DistributiveOmit<Extract<SherpaRequest, { id: number }>, 'id'>;
+
+export type AsrResultCallback = (text: string, isFinal: boolean) => void;
+
+/**
+ * Main-thread handle to the sherpa worker. The worker (and its 15 MB WASM) starts on
+ * first use, so the app pays nothing until a sherpa model is selected.
+ */
+export class SherpaClient {
+  private worker: Worker | null = null;
+  private nextId = 1;
+  private pending = new Map<number, { resolve: (v: GeneratedSpeech | undefined) => void; reject: (e: Error) => void }>();
+  private asrListeners = new Set<AsrResultCallback>();
+  private loadedTts: string | null = null;
+  private loadedAsr: string | null = null;
+
+  private getWorker(): Worker {
+    if (!this.worker) {
+      this.worker = new Worker(new URL('./sherpaWorker.ts', import.meta.url), { type: 'module' });
+      this.worker.onmessage = (e: MessageEvent<SherpaWorkerMessage>) => this.onMessage(e.data);
+      this.worker.onerror = (e) => {
+        console.error('SherpaClient: worker error', e.message);
+        for (const p of this.pending.values()) p.reject(new Error(e.message || 'Speech engine crashed'));
+        this.pending.clear();
+        this.worker?.terminate();
+        this.worker = null;
+        this.loadedTts = null;
+        this.loadedAsr = null;
+      };
+    }
+    return this.worker;
+  }
+
+  private onMessage(msg: SherpaWorkerMessage): void {
+    if (msg.type === 'reply') {
+      const p = this.pending.get(msg.id);
+      if (!p) return;
+      this.pending.delete(msg.id);
+      if (msg.ok) p.resolve(msg.audio);
+      else p.reject(new Error(msg.error));
+      return;
+    }
+    const isFinal = msg.type === 'asrFinal';
+    for (const cb of this.asrListeners) cb(msg.text, isFinal);
+  }
+
+  private call(req: RpcRequest): Promise<GeneratedSpeech | undefined> {
+    const id = this.nextId++;
+    return new Promise((resolve, reject) => {
+      this.pending.set(id, { resolve, reject });
+      this.getWorker().postMessage({ ...req, id });
+    });
+  }
+
+  public async loadTts(modelId: string): Promise<void> {
+    if (this.loadedTts === modelId) return;
+    await this.call({ type: 'loadTts', modelId, baseUrl: defaultModelsBaseUrl() });
+    this.loadedTts = modelId;
+  }
+
+  public async unloadTts(): Promise<void> {
+    if (!this.worker || !this.loadedTts) return;
+    this.loadedTts = null;
+    await this.call({ type: 'unloadTts' });
+  }
+
+  public async generate(text: string, sid: number, speed: number): Promise<GeneratedSpeech> {
+    const audio = await this.call({ type: 'generate', text, sid, speed });
+    if (!audio) throw new Error('No audio generated');
+    return audio;
+  }
+
+  public async loadAsr(modelId: string): Promise<void> {
+    if (this.loadedAsr === modelId) return;
+    await this.call({ type: 'loadAsr', modelId, baseUrl: defaultModelsBaseUrl() });
+    this.loadedAsr = modelId;
+  }
+
+  public async unloadAsr(): Promise<void> {
+    if (!this.worker || !this.loadedAsr) return;
+    this.loadedAsr = null;
+    await this.call({ type: 'unloadAsr' });
+  }
+
+  public resetAsr(): void {
+    if (this.loadedAsr) this.getWorker().postMessage({ type: 'asrReset' } satisfies SherpaRequest);
+  }
+
+  /** Streams mic audio to the recognizer; the buffer is transferred, so pass a copy. */
+  public feedAsr(samples: Float32Array, sampleRate: number): void {
+    if (!this.loadedAsr) return;
+    this.getWorker().postMessage({ type: 'asrAudio', samples, sampleRate } satisfies SherpaRequest, [samples.buffer]);
+  }
+
+  public onAsrResult(cb: AsrResultCallback): () => void {
+    this.asrListeners.add(cb);
+    return () => this.asrListeners.delete(cb);
+  }
+
+  public isTtsLoaded(modelId: string): boolean {
+    return this.loadedTts === modelId;
+  }
+}

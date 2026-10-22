@@ -16,7 +16,7 @@ import {
   parseAndFormatResult,
 } from '../speech/ttsFormatter';
 import { parseVoiceInput } from '../speech/voiceParser';
-import { SpeechService, SttEngineMode } from '../speech/speechService';
+import { SpeechService, SttEngineMode, TtsEngineMode } from '../speech/speechService';
 
 export interface RecentLookupItem {
   key: string;
@@ -41,6 +41,7 @@ export interface VoiceControllerState {
   isListening: boolean;
   handsFreeMode: boolean;
   sttEngine: SttEngineMode;
+  ttsEngine: TtsEngineMode;
   isMuted: boolean;
   recentLookups: RecentLookupItem[];
 }
@@ -106,6 +107,7 @@ export class VoiceController {
       isListening: speechState.isListening,
       handsFreeMode: storedHandsFree,
       sttEngine: speechState.engine,
+      ttsEngine: speechState.ttsEngine,
       isMuted: this.speech.isMuted(),
       recentLookups: storedRecents,
     };
@@ -129,6 +131,11 @@ export class VoiceController {
 
       if (this.state.sttEngine !== s.engine) {
         this.state.sttEngine = s.engine;
+        stateChanged = true;
+      }
+
+      if (this.state.ttsEngine !== s.ttsEngine) {
+        this.state.ttsEngine = s.ttsEngine;
         stateChanged = true;
       }
 

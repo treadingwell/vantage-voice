@@ -1,11 +1,21 @@
 import { createModel, Model, KaldiRecognizer } from 'vosk-browser';
+import { SherpaClient } from './sherpa/sherpaClient';
+import { NeuralNarrator } from './neuralNarrator';
+import { getModel, isModelDownloaded } from './models/modelStore';
+import { normalizeForSpeech } from './ttsFormatter';
 
-export type SttEngineMode = 'web-speech' | 'offline-wasm';
+export type SttEngineMode = 'web-speech' | 'offline-wasm' | 'sherpa';
+
+/** 'native' is the device's speechSynthesis; the others are sherpa model ids. */
+export type TtsEngineMode = 'native' | 'kitten-nano' | 'supertonic-2';
+
+export const SHERPA_STT_MODEL_ID = 'kroko-en';
 
 export interface SpeechServiceState {
   isListening: boolean;
   isSpeaking: boolean;
   engine: SttEngineMode;
+  ttsEngine: TtsEngineMode;
   offlineModelReady: boolean;
   error?: string;
 }
@@ -32,6 +42,16 @@ export const VOSK_CACHE_NAME = 'vantage-vosk-model-cache-v1';
 const TTS_START_TIMEOUT_MS = 2000;
 const VOICE_LANG_STORAGE_KEY = 'vantage_voice_lang';
 const VOICE_NAME_STORAGE_KEY = 'vantage_voice_name';
+const STT_ENGINE_STORAGE_KEY = 'vantage_stt_engine';
+const TTS_ENGINE_STORAGE_KEY = 'vantage_tts_engine';
+const NEURAL_VOICE_STORAGE_PREFIX = 'vantage_tts_voice_';
+const SENTENCE_PAUSE_STORAGE_KEY = 'vantage_sentence_pause_ms';
+
+/** Extra silence between sentences for neural narrators */
+export const DEFAULT_SENTENCE_PAUSE_MS = 250;
+
+const STT_ENGINES: SttEngineMode[] = ['web-speech', 'offline-wasm', 'sherpa'];
+const TTS_ENGINES: TtsEngineMode[] = ['native', 'kitten-nano', 'supertonic-2'];
 
 /** 'en' matches every English locale; 'all' disables filtering. */
 export const DEFAULT_VOICE_LANGUAGE = 'en';
@@ -115,6 +135,12 @@ export class SpeechService {
   private ttsStartTimer: ReturnType<typeof setTimeout> | null = null;
   private finishActiveSpeech: (() => void) | null = null;
 
+  // Neural (sherpa) TTS
+  private ttsEngine: TtsEngineMode = 'native';
+  private sentencePauseMs = DEFAULT_SENTENCE_PAUSE_MS;
+  private sherpa: SherpaClient | null = null;
+  private narrator: NeuralNarrator | null = null;
+
   // STT State
   private currentEngine: SttEngineMode = 'web-speech';
   private isListeningState = false;
@@ -136,6 +162,7 @@ export class SpeechService {
   private mediaSource: MediaStreamAudioSourceNode | null = null;
   private audioProcessor: ScriptProcessorNode | null = null;
   private audioZeroGain: GainNode | null = null;
+  private micAudioHandler: ((buffer: AudioBuffer) => void) | null = null;
   private modelBlobUrl: string | null = null;
 
   // Event Listeners
@@ -144,6 +171,47 @@ export class SpeechService {
 
   constructor() {
     this.initVoices();
+
+    const savedStt = loadPref(STT_ENGINE_STORAGE_KEY) as SttEngineMode | null;
+    if (savedStt && STT_ENGINES.includes(savedStt)) this.currentEngine = savedStt;
+    // A saved neural narrator is only used once its model is loaded (see ensureNarratorReady)
+    const savedTts = loadPref(TTS_ENGINE_STORAGE_KEY) as TtsEngineMode | null;
+    if (savedTts && TTS_ENGINES.includes(savedTts)) this.ttsEngine = savedTts;
+    const savedPause = Number(loadPref(SENTENCE_PAUSE_STORAGE_KEY));
+    if (loadPref(SENTENCE_PAUSE_STORAGE_KEY) !== null && Number.isFinite(savedPause)) {
+      this.sentencePauseMs = savedPause;
+    }
+  }
+
+  private getSherpa(): SherpaClient {
+    if (!this.sherpa) {
+      this.sherpa = new SherpaClient();
+      this.sherpa.onAsrResult((text, isFinal) => {
+        if (this.currentEngine === 'sherpa' && !this.temporarilyPausedForSpeech && !this.isSpeakingState) {
+          this.notifyTranscript(text, isFinal);
+        }
+      });
+    }
+    return this.sherpa;
+  }
+
+  private getNarrator(): NeuralNarrator {
+    if (!this.narrator) {
+      this.narrator = new NeuralNarrator(this.getSherpa(), () => this.getAudioContext());
+    }
+    return this.narrator;
+  }
+
+  private getAudioContext(): AudioContext | null {
+    if (typeof window === 'undefined') return null;
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioCtx) return null;
+    if (!this.audioContext || this.audioContext.state === 'closed') {
+      this.audioContext = new AudioCtx();
+    }
+    return this.audioContext;
   }
 
   // =========================================================================
@@ -383,13 +451,73 @@ export class SpeechService {
     this.stopSpeaking();
 
     // Check mute or empty text
-    const cleanText = text.trim();
+    const cleanText = normalizeForSpeech(text.trim());
     if (this.muted || !cleanText) {
       options?.onStart?.();
       options?.onEnd?.();
       return Promise.resolve();
     }
 
+    if (this.ttsEngine !== 'native' && this.sherpa?.isTtsLoaded(this.ttsEngine)) {
+      return this.speakNeural(cleanText, options);
+    }
+    return this.speakNative(cleanText, options);
+  }
+
+  /**
+   * Speaks through the selected sherpa model. Falls back to the device voice for this
+   * utterance if generation fails, so the game never goes silent.
+   */
+  private speakNeural(cleanText: string, options?: SpeakOptions): Promise<void> {
+    const wasListeningBeforeSpeak = this.isListeningDesired;
+    if (wasListeningBeforeSpeak) {
+      this.pauseListeningForSpeech();
+    }
+
+    // Speaking covers generation time too, so the mic stays ignored while audio is prepared
+    this.isSpeakingState = true;
+    this.notifyStateChange();
+
+    return new Promise<void>((resolve) => {
+      let isCompleted = false;
+      const finish = (failed: boolean) => {
+        if (isCompleted) return;
+        isCompleted = true;
+        if (this.finishActiveSpeech === finishInterrupted) this.finishActiveSpeech = null;
+        this.isSpeakingState = false;
+        this.notifyStateChange();
+        if (wasListeningBeforeSpeak && this.isListeningDesired) {
+          this.resumeListeningAfterSpeech();
+        }
+        // On failure the device-voice fallback resolves instead
+        if (!failed) {
+          options?.onEnd?.();
+          resolve();
+        }
+      };
+      const finishInterrupted = () => finish(false);
+      this.finishActiveSpeech = finishInterrupted;
+
+      this.getNarrator()
+        .narrate(cleanText, {
+          sid: this.getNeuralVoice(this.ttsEngine),
+          speed: this.speechRate,
+          sentencePauseMs: this.sentencePauseMs,
+          onStart: () => options?.onStart?.(),
+        })
+        .then(
+          () => finish(false),
+          (err) => {
+            if (isCompleted) return;
+            console.warn('SpeechService: neural TTS failed, using device voice:', err);
+            finish(true);
+            this.speakNative(cleanText, options).then(resolve);
+          }
+        );
+    });
+  }
+
+  private speakNative(cleanText: string, options?: SpeakOptions): Promise<void> {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
       options?.onStart?.();
       options?.onEnd?.();
@@ -573,6 +701,7 @@ export class SpeechService {
       this.ttsKeepAliveTimer = null;
     }
     this.activeUtterance = null;
+    this.narrator?.stop();
 
     // Only cancel when something is queued: a needless cancel() right before speak()
     // makes Chrome drop the next utterance.
@@ -600,6 +729,96 @@ export class SpeechService {
     return this.isSpeakingState;
   }
 
+  // -------------------------------------------------------------------------
+  // Neural narrator selection (sherpa models)
+  // -------------------------------------------------------------------------
+
+  public getTtsEngine(): TtsEngineMode {
+    return this.ttsEngine;
+  }
+
+  /** True when the selected narrator is actually in use (neural models must be loaded). */
+  public isTtsEngineActive(): boolean {
+    return this.ttsEngine === 'native' || Boolean(this.sherpa?.isTtsLoaded(this.ttsEngine));
+  }
+
+  /**
+   * Switches narrator. Neural models must already be downloaded; they're loaded into the
+   * worker here (about a second), so the first prompt doesn't pay that cost.
+   */
+  public async setTtsEngine(mode: TtsEngineMode): Promise<void> {
+    this.stopSpeaking();
+    if (mode !== 'native') {
+      const model = getModel(mode);
+      if (!model || !(await isModelDownloaded(model))) {
+        throw new Error('Download this narrator before selecting it.');
+      }
+      await this.getSherpa().loadTts(mode);
+    } else {
+      await this.sherpa?.unloadTts();
+    }
+    this.ttsEngine = mode;
+    savePref(TTS_ENGINE_STORAGE_KEY, mode);
+    this.notifyStateChange();
+  }
+
+  public getNeuralVoice(mode: TtsEngineMode): number {
+    const saved = Number(loadPref(NEURAL_VOICE_STORAGE_PREFIX + mode));
+    return Number.isInteger(saved) && saved >= 0 ? saved : 0;
+  }
+
+  public setNeuralVoice(mode: TtsEngineMode, sid: number): void {
+    savePref(NEURAL_VOICE_STORAGE_PREFIX + mode, String(sid));
+  }
+
+  public getSentencePauseMs(): number {
+    return this.sentencePauseMs;
+  }
+
+  public setSentencePauseMs(ms: number): void {
+    this.sentencePauseMs = Math.min(1500, Math.max(0, Math.round(ms)));
+    savePref(SENTENCE_PAUSE_STORAGE_KEY, String(this.sentencePauseMs));
+  }
+
+  /**
+   * Reloads the saved narrator and recognition models at startup when they're downloaded,
+   * falling back to the built-in engines otherwise.
+   */
+  public async restoreSavedEngines(): Promise<void> {
+    if (this.ttsEngine !== 'native') {
+      try {
+        await this.setTtsEngine(this.ttsEngine);
+      } catch (err) {
+        console.warn('SpeechService: saved narrator unavailable, using device voice:', err);
+        this.ttsEngine = 'native';
+        this.notifyStateChange();
+      }
+    }
+
+    if (this.currentEngine === 'offline-wasm' && !(await this.isOfflineModelCached())) {
+      this.currentEngine = 'web-speech';
+      this.notifyStateChange();
+    }
+    if (this.currentEngine === 'sherpa') {
+      const model = getModel(SHERPA_STT_MODEL_ID);
+      if (!model || !(await isModelDownloaded(model))) {
+        this.currentEngine = 'web-speech';
+        this.notifyStateChange();
+      }
+    }
+  }
+
+  /** Frees a neural model from memory, e.g. before its files are deleted. */
+  public async releaseSherpaModel(modelId: string): Promise<void> {
+    if (this.ttsEngine === modelId) {
+      await this.setTtsEngine('native');
+    }
+    if (modelId === SHERPA_STT_MODEL_ID) {
+      if (this.currentEngine === 'sherpa') await this.setEngine('web-speech');
+      await this.sherpa?.unloadAsr();
+    }
+  }
+
   // =========================================================================
   // 2. Dual-Engine Local Speech-to-Text (STT)
   // =========================================================================
@@ -617,6 +836,7 @@ export class SpeechService {
     }
 
     this.currentEngine = mode;
+    savePref(STT_ENGINE_STORAGE_KEY, mode);
     this.notifyStateChange();
 
     if (wasListening) {
@@ -663,6 +883,29 @@ export class SpeechService {
     } catch {
       return false;
     }
+  }
+
+  /** Deletes the cached Vosk model, switching recognition back to the browser if needed. */
+  public async deleteOfflineModel(modelUrl: string = DEFAULT_VOSK_MODEL_URL): Promise<void> {
+    if (this.currentEngine === 'offline-wasm') {
+      await this.setEngine('web-speech');
+    }
+    this.voskModel?.terminate();
+    this.voskModel = null;
+    this.offlineModelReady = false;
+    if (this.modelBlobUrl) {
+      URL.revokeObjectURL(this.modelBlobUrl);
+      this.modelBlobUrl = null;
+    }
+    if (typeof caches !== 'undefined') {
+      try {
+        const cache = await caches.open(VOSK_CACHE_NAME);
+        await cache.delete(modelUrl);
+      } catch {
+        // ignore
+      }
+    }
+    this.notifyStateChange();
   }
 
   /**
@@ -794,7 +1037,13 @@ export class SpeechService {
     await this.unlockAudio();
 
     if (this.currentEngine === 'offline-wasm') {
+      // Load the cached model after a reload; never start a 40 MB download implicitly
+      if (!this.voskModel?.ready && (await this.isOfflineModelCached())) {
+        await this.downloadAndInitOfflineModel();
+      }
       await this.startOfflineVosk();
+    } else if (this.currentEngine === 'sherpa') {
+      await this.startSherpaStt();
     } else {
       this.startWebSpeech();
     }
@@ -815,6 +1064,8 @@ export class SpeechService {
 
     if (this.currentEngine === 'offline-wasm') {
       this.stopOfflineVosk();
+    } else if (this.currentEngine === 'sherpa') {
+      this.stopMicCapture();
     } else {
       this.stopWebSpeech();
     }
@@ -1022,61 +1273,15 @@ export class SpeechService {
     }
 
     try {
-      if (typeof window === 'undefined') return;
-
-      const AudioCtx =
-        window.AudioContext ||
-        (window as unknown as { webkitAudioContext?: typeof AudioContext })
-          .webkitAudioContext;
-
-      if (!this.audioContext || this.audioContext.state === 'closed') {
-        this.audioContext = new AudioCtx();
-      }
-
-      if (this.audioContext.state === 'suspended') {
-        await this.audioContext.resume();
-      }
-
+      if (!this.getAudioContext()) return;
       this.recreateVoskRecognizer();
-
-      // Acquire microphone stream with echo cancellation and noise suppression
-      this.mediaStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          channelCount: 1,
-        },
-      });
-
-      this.mediaSource = this.audioContext.createMediaStreamSource(this.mediaStream);
-      this.audioProcessor = this.audioContext.createScriptProcessor(4096, 1, 1);
-
-      this.audioProcessor.onaudioprocess = (event: AudioProcessingEvent) => {
-        if (
-          !this.isListeningState ||
-          this.temporarilyPausedForSpeech ||
-          this.isSpeakingState
-        ) {
-          return;
-        }
-
+      await this.startMicCapture((buffer) => {
         try {
-          this.voskRecognizer?.acceptWaveform(event.inputBuffer);
+          this.voskRecognizer?.acceptWaveform(buffer);
         } catch (err) {
           console.error('SpeechService: acceptWaveform error:', err);
         }
-      };
-
-      // Connect through a zero-gain node so microphone audio doesn't loop back to speaker
-      this.audioZeroGain = this.audioContext.createGain();
-      this.audioZeroGain.gain.value = 0;
-
-      this.mediaSource.connect(this.audioProcessor);
-      this.audioProcessor.connect(this.audioZeroGain);
-      this.audioZeroGain.connect(this.audioContext.destination);
-
-      this.isListeningState = true;
-      this.notifyStateChange();
+      });
     } catch (err) {
       const errorMsg =
         err instanceof Error ? err.message : 'Failed to start offline microphone capture';
@@ -1087,6 +1292,102 @@ export class SpeechService {
   }
 
   private stopOfflineVosk(): void {
+    this.stopMicCapture();
+
+    if (this.voskRecognizer) {
+      try {
+        this.voskRecognizer.remove();
+      } catch {}
+      this.voskRecognizer = null;
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Engine 3: Sherpa streaming Zipformer (runs in the sherpa Web Worker)
+  // -------------------------------------------------------------------------
+
+  private async startSherpaStt(): Promise<void> {
+    try {
+      const model = getModel(SHERPA_STT_MODEL_ID);
+      if (!model || !(await isModelDownloaded(model))) {
+        throw new Error('Download the Sherpa streaming model in Settings first.');
+      }
+      const sherpa = this.getSherpa();
+      await sherpa.loadAsr(SHERPA_STT_MODEL_ID);
+      if (!this.isListeningDesired) return;
+      sherpa.resetAsr();
+      const sampleRate = this.getAudioContext()?.sampleRate ?? 48000;
+      await this.startMicCapture((buffer) => {
+        // Copy: the worker takes ownership of the transferred buffer
+        sherpa.feedAsr(new Float32Array(buffer.getChannelData(0)), sampleRate);
+      });
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to start sherpa recognition';
+      console.error('SpeechService: startSherpaStt error:', err);
+      this.isListeningState = false;
+      this.notifyStateChange({ error: errorMsg });
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Shared microphone capture for the offline engines
+  // -------------------------------------------------------------------------
+
+  /**
+   * Opens the mic and calls onAudio for every captured block, except while the app is
+   * speaking (frames are dropped so the recognizer never hears its own voice).
+   */
+  private async startMicCapture(onAudio: (buffer: AudioBuffer) => void): Promise<void> {
+    const ctx = this.getAudioContext();
+    if (!ctx) throw new Error('Web Audio is not available');
+    if (ctx.state === 'suspended') {
+      await ctx.resume();
+    }
+
+    // Already capturing (e.g. listening resumes after a prompt): keep the mic open and just
+    // swap the handler, rather than re-requesting the microphone every time
+    const liveTrack = this.mediaStream?.getAudioTracks().some((t) => t.readyState === 'live');
+    if (liveTrack && this.audioProcessor) {
+      this.micAudioHandler = onAudio;
+      this.isListeningState = true;
+      this.notifyStateChange();
+      return;
+    }
+    this.stopMicCapture();
+    this.micAudioHandler = onAudio;
+
+    // Acquire microphone stream with echo cancellation and noise suppression
+    this.mediaStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        channelCount: 1,
+      },
+    });
+
+    this.mediaSource = ctx.createMediaStreamSource(this.mediaStream);
+    this.audioProcessor = ctx.createScriptProcessor(4096, 1, 1);
+
+    this.audioProcessor.onaudioprocess = (event: AudioProcessingEvent) => {
+      if (!this.isListeningState || this.temporarilyPausedForSpeech || this.isSpeakingState) {
+        return;
+      }
+      this.micAudioHandler?.(event.inputBuffer);
+    };
+
+    // Connect through a zero-gain node so microphone audio doesn't loop back to speaker
+    this.audioZeroGain = ctx.createGain();
+    this.audioZeroGain.gain.value = 0;
+
+    this.mediaSource.connect(this.audioProcessor);
+    this.audioProcessor.connect(this.audioZeroGain);
+    this.audioZeroGain.connect(ctx.destination);
+
+    this.isListeningState = true;
+    this.notifyStateChange();
+  }
+
+  private stopMicCapture(): void {
     if (this.mediaStream) {
       try {
         this.mediaStream.getTracks().forEach((track) => track.stop());
@@ -1116,13 +1417,7 @@ export class SpeechService {
       this.audioZeroGain = null;
     }
 
-    if (this.voskRecognizer) {
-      try {
-        this.voskRecognizer.remove();
-      } catch {}
-      this.voskRecognizer = null;
-    }
-
+    this.micAudioHandler = null;
     this.isListeningState = false;
     this.notifyStateChange();
   }
@@ -1151,6 +1446,9 @@ export class SpeechService {
     if (this.isListeningDesired && !this.isSpeakingState) {
       if (this.currentEngine === 'web-speech') {
         this.startWebSpeech();
+      } else if (this.currentEngine === 'sherpa') {
+        // Drop any half-heard words from before the prompt
+        this.sherpa?.resetAsr();
       }
     }
   }
@@ -1180,6 +1478,7 @@ export class SpeechService {
       isListening: this.isListeningState,
       isSpeaking: this.isSpeakingState,
       engine: this.currentEngine,
+      ttsEngine: this.isTtsEngineActive() ? this.ttsEngine : 'native',
       offlineModelReady: this.offlineModelReady,
     };
   }
@@ -1203,6 +1502,7 @@ export class SpeechService {
       isListening: this.isListeningState,
       isSpeaking: this.isSpeakingState,
       engine: this.currentEngine,
+      ttsEngine: this.isTtsEngineActive() ? this.ttsEngine : 'native',
       offlineModelReady: this.offlineModelReady,
       ...override,
     };

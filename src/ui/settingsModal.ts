@@ -1,15 +1,89 @@
-import { SpeechService, SttEngineMode } from '../speech/speechService';
+import { SpeechService, SttEngineMode, TtsEngineMode } from '../speech/speechService';
+import {
+  deleteModel,
+  downloadModel,
+  getModel,
+  isModelDownloaded,
+  SHERPA_RUNTIME,
+} from '../speech/models/modelStore';
 import { VoiceController } from './voiceController';
+
+/** Downloadable models shown in settings: the Vosk pack plus the sherpa catalog entries. */
+type ModelKey = 'vosk' | 'kroko-en' | 'kitten-nano' | 'supertonic-2';
+
+type ModelStatus = 'checking' | 'missing' | 'ready';
+
+interface DownloadProgress {
+  percent: number;
+  status: string;
+}
+
+interface EngineOption<T extends string> {
+  value: T;
+  title: string;
+  desc: string;
+  model?: ModelKey;
+}
+
+const VOSK_MB = 40;
+
+const STT_OPTIONS: EngineOption<SttEngineMode>[] = [
+  {
+    value: 'web-speech',
+    title: 'Browser speech recognition',
+    desc: 'No download. Uses your browser or phone (may need internet).',
+  },
+  {
+    value: 'offline-wasm',
+    title: 'Vosk (offline)',
+    desc: 'Listens for Vantage words only. Results after you stop talking.',
+    model: 'vosk',
+  },
+  {
+    value: 'sherpa',
+    title: 'Kroko streaming (offline)',
+    desc: 'Live word-by-word recognition. Most accurate offline option.',
+    model: 'kroko-en',
+  },
+];
+
+const TTS_OPTIONS: EngineOption<TtsEngineMode>[] = [
+  {
+    value: 'native',
+    title: 'Phone voice',
+    desc: 'No download. Quality depends on your device.',
+  },
+  {
+    value: 'supertonic-2',
+    title: 'Supertonic 2',
+    desc: 'Most natural and fastest offline narrator. 10 voices.',
+    model: 'supertonic-2',
+  },
+  {
+    value: 'kitten-nano',
+    title: 'Kitten Nano',
+    desc: 'Smallest offline narrator. 8 voices.',
+    model: 'kitten-nano',
+  },
+];
 
 export class SettingsModal {
   private container: HTMLElement;
   private controller: VoiceController;
   private speech: SpeechService;
   private isOpen = false;
-  private isDownloadingModel = false;
-  private downloadStatus = '';
-  private downloadPercent = 0;
   private unsubController: (() => void) | null = null;
+
+  private modelStatus: Record<ModelKey, ModelStatus> = {
+    vosk: 'checking',
+    'kroko-en': 'checking',
+    'kitten-nano': 'checking',
+    'supertonic-2': 'checking',
+  };
+  private downloads: Partial<Record<ModelKey, DownloadProgress>> = {};
+  private errorMessage = '';
+  private busyMessage = '';
+  private storageUsedMB: number | null = null;
 
   constructor(container: HTMLElement, controller: VoiceController) {
     this.container = container;
@@ -35,7 +109,9 @@ export class SettingsModal {
   public open(): void {
     this.isOpen = true;
     this.container.classList.add('is-open');
+    this.errorMessage = '';
     this.render();
+    void this.refreshModelStatus();
   }
 
   public close(): void {
@@ -51,6 +127,37 @@ export class SettingsModal {
     }
   }
 
+  private modelSizeMB(key: ModelKey): number {
+    if (key === 'vosk') return VOSK_MB;
+    return getModel(key)?.approxMB ?? 0;
+  }
+
+  private modelLabel(key: ModelKey): string {
+    if (key === 'vosk') return 'Vosk speech model';
+    return getModel(key)?.label ?? key;
+  }
+
+  private async refreshModelStatus(): Promise<void> {
+    const keys: ModelKey[] = ['vosk', 'kroko-en', 'kitten-nano', 'supertonic-2'];
+    for (const key of keys) {
+      if (key === 'vosk') {
+        this.modelStatus.vosk = (await this.speech.isOfflineModelCached()) ? 'ready' : 'missing';
+      } else {
+        const entry = getModel(key);
+        this.modelStatus[key] = entry && (await isModelDownloaded(entry)) ? 'ready' : 'missing';
+      }
+    }
+
+    try {
+      const estimate = await navigator.storage?.estimate?.();
+      this.storageUsedMB = estimate?.usage ? Math.round(estimate.usage / (1024 * 1024)) : null;
+    } catch {
+      this.storageUsedMB = null;
+    }
+
+    if (this.isOpen) this.render();
+  }
+
   public render(): void {
     if (!this.isOpen) {
       this.container.innerHTML = '';
@@ -58,15 +165,9 @@ export class SettingsModal {
     }
 
     const state = this.controller.getState();
-    const isOfflineReady = this.speech.isOfflineModelReady();
-    const voices = this.speech.getFilteredVoices();
-    const selectedVoice = this.speech.getSelectedVoice();
-    const voiceLanguage = this.speech.getVoiceLanguage();
-    const languageOptions = ['en', ...this.speech.getEnglishVoiceLocales(), 'all'];
-    if (!languageOptions.includes(voiceLanguage)) {
-      languageOptions.splice(1, 0, voiceLanguage);
-    }
     const currentRate = this.speech.getSpeechRate();
+    const ttsEngine = this.speech.getTtsEngine();
+    const pauseMs = this.speech.getSentencePauseMs();
 
     this.container.innerHTML = `
       <div class="modal-backdrop" id="modal-backdrop"></div>
@@ -85,96 +186,18 @@ export class SettingsModal {
         </header>
 
         <div class="modal-body">
-          <!-- STT Engine Selector -->
+          ${this.errorMessage ? `<div class="settings-error" role="alert">${this.errorMessage}</div>` : ''}
+          ${this.busyMessage ? `<div class="settings-busy" role="status">${this.busyMessage}</div>` : ''}
+
+          <!-- Narrator (TTS) -->
           <section class="settings-section">
-            <h3 class="section-heading">Speech Recognition Engine (STT)</h3>
+            <h3 class="section-heading">Story Narrator</h3>
             <div class="engine-radios">
-              <label class="engine-option-card ${state.sttEngine === 'web-speech' ? 'is-selected' : ''}">
-                <input
-                  type="radio"
-                  name="stt-engine"
-                  value="web-speech"
-                  ${state.sttEngine === 'web-speech' ? 'checked' : ''}
-                />
-                <div class="engine-info">
-                  <div class="engine-title">Browser Web Speech API</div>
-                  <div class="engine-desc">Instant online/native speech recognition. Zero download required.</div>
-                </div>
-              </label>
-
-              <label class="engine-option-card ${state.sttEngine === 'offline-wasm' ? 'is-selected' : ''}">
-                <input
-                  type="radio"
-                  name="stt-engine"
-                  value="offline-wasm"
-                  ${state.sttEngine === 'offline-wasm' ? 'checked' : ''}
-                />
-                <div class="engine-info">
-                  <div class="engine-title">Offline Airplane Mode (Vosk WASM)</div>
-                  <div class="engine-desc">100% offline local model. Vantage vocabulary constrained. Silent continuous listening.</div>
-                </div>
-              </label>
+              ${TTS_OPTIONS.map((o) => this.renderEngineOption('tts-engine', o, ttsEngine)).join('')}
             </div>
           </section>
 
-          <!-- Offline Voice Pack Download Section -->
           <section class="settings-section">
-            <h3 class="section-heading">Offline Voice Model Pack (~40 MB)</h3>
-            <div class="voice-pack-card">
-              <div class="pack-status-row">
-                <span class="pack-status-icon">${isOfflineReady ? '✓' : '📦'}</span>
-                <span class="pack-status-text">
-                  ${isOfflineReady ? 'Offline Model Ready (vosk-model-small-en-us-0.15 cached)' : 'Model Not Downloaded (~40 MB)'}
-                </span>
-              </div>
-
-              ${
-                this.isDownloadingModel
-                  ? `
-                <div class="download-progress-bar-wrapper">
-                  <div class="download-progress-bar" style="width: ${this.downloadPercent}%;"></div>
-                </div>
-                <div class="download-status-detail">${this.downloadStatus || 'Downloading...'}</div>
-              `
-                  : `
-                <button
-                  type="button"
-                  class="btn-download-pack ${isOfflineReady ? 'btn-re-download' : 'btn-primary-pack'}"
-                  id="btn-download-pack"
-                >
-                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                    <polyline points="7 10 12 15 17 10"></polyline>
-                    <line x1="12" y1="15" x2="12" y2="3"></line>
-                  </svg>
-                  <span>${isOfflineReady ? 'Re-Download / Update Voice Pack' : 'Download Offline Voice Pack (~40 MB)'}</span>
-                </button>
-              `
-              }
-            </div>
-          </section>
-
-          <!-- Hands-Free Continuous Mode Toggle -->
-          <section class="settings-section">
-            <div class="toggle-row">
-              <div class="toggle-info">
-                <label for="toggle-hands-free" class="toggle-title">Hands-Free Continuous Listening</label>
-                <div class="toggle-desc">Automatically returns to listening for commands after reading story entries.</div>
-              </div>
-              <input
-                type="checkbox"
-                id="toggle-hands-free"
-                class="toggle-checkbox"
-                ${state.handsFreeMode ? 'checked' : ''}
-              />
-            </div>
-          </section>
-
-          <!-- Text-to-Speech (TTS) Settings -->
-          <section class="settings-section">
-            <h3 class="section-heading">Story Narrator (TTS)</h3>
-
-            <!-- Speed Slider -->
             <div class="form-group">
               <div class="slider-header">
                 <label for="rate-slider">Narration Speed</label>
@@ -191,37 +214,8 @@ export class SettingsModal {
               />
             </div>
 
-            <!-- Language Filter -->
-            <div class="form-group">
-              <label for="voice-lang-select">Voice Language</label>
-              <select id="voice-lang-select" class="voice-select">
-                ${languageOptions
-                  .map(
-                    (lang) =>
-                      `<option value="${lang}" ${lang === voiceLanguage ? 'selected' : ''}>${this.formatLanguageLabel(lang)}</option>`
-                  )
-                  .join('')}
-              </select>
-            </div>
+            ${ttsEngine === 'native' ? this.renderNativeVoiceControls() : this.renderNeuralVoiceControls(ttsEngine, pauseMs)}
 
-            <!-- Voice Selector -->
-            <div class="form-group">
-              <label for="voice-select">Narrator Voice</label>
-              <select id="voice-select" class="voice-select">
-                ${
-                  voices.length > 0
-                    ? voices
-                        .map((v) => {
-                          const isSelected = selectedVoice && selectedVoice.name === v.name;
-                          return `<option value="${v.name}" ${isSelected ? 'selected' : ''}>${v.name} (${v.lang})${v.default ? ' [Default]' : ''}</option>`;
-                        })
-                        .join('')
-                    : `<option value="">Default System Voice</option>`
-                }
-              </select>
-            </div>
-
-            <!-- Test Voice Button -->
             <button type="button" class="btn-test-voice" id="btn-test-voice">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
                 <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
@@ -230,11 +224,176 @@ export class SettingsModal {
               <span>Test Voice & Speed</span>
             </button>
           </section>
+
+          <!-- Speech Recognition (STT) -->
+          <section class="settings-section">
+            <h3 class="section-heading">Speech Recognition</h3>
+            <div class="engine-radios">
+              ${STT_OPTIONS.map((o) => this.renderEngineOption('stt-engine', o, state.sttEngine)).join('')}
+            </div>
+          </section>
+
+          <section class="settings-section">
+            <div class="toggle-row">
+              <div class="toggle-info">
+                <label for="toggle-hands-free" class="toggle-title">Hands-Free Continuous Listening</label>
+                <div class="toggle-desc">Automatically returns to listening for commands after reading story entries.</div>
+              </div>
+              <input
+                type="checkbox"
+                id="toggle-hands-free"
+                class="toggle-checkbox"
+                ${state.handsFreeMode ? 'checked' : ''}
+              />
+            </div>
+          </section>
+
+          <p class="storage-note">
+            Offline models work in Airplane Mode once downloaded. Sherpa models share a
+            ${SHERPA_RUNTIME.approxMB} MB speech engine.
+            ${this.storageUsedMB !== null ? `This app is using about ${this.storageUsedMB} MB on this device.` : ''}
+          </p>
         </div>
       </div>
     `;
 
     this.bindEvents();
+  }
+
+  private renderEngineOption<T extends string>(name: string, option: EngineOption<T>, selected: T): string {
+    const status = option.model ? this.modelStatus[option.model] : 'ready';
+    const isSelected = option.value === selected;
+    const isUsable = status === 'ready';
+    const size = option.model ? ` · ~${this.modelSizeMB(option.model)} MB` : '';
+
+    return `
+      <div class="engine-option-card ${option.model ? 'has-model' : ''} ${isSelected ? 'is-selected' : ''} ${isUsable ? '' : 'is-unavailable'}">
+        <label class="engine-option-main">
+          <input
+            type="radio"
+            name="${name}"
+            value="${option.value}"
+            ${isSelected ? 'checked' : ''}
+            ${isUsable ? '' : 'disabled'}
+          />
+          <div class="engine-info">
+            <div class="engine-title">${option.title}<span class="engine-size">${size}</span></div>
+            <div class="engine-desc">${option.desc}</div>
+            ${option.model && option.model !== 'vosk' && getModel(option.model)?.credit ? `<div class="engine-credit">${getModel(option.model)?.credit}</div>` : ''}
+          </div>
+        </label>
+        ${option.model ? this.renderModelRow(option.model) : ''}
+      </div>
+    `;
+  }
+
+  private renderModelRow(key: ModelKey): string {
+    const progress = this.downloads[key];
+    if (progress) {
+      return `
+        <div class="model-row">
+          <div class="model-progress">
+            <div class="download-progress-bar-wrapper">
+              <div class="download-progress-bar" data-progress-key="${key}" style="width: ${progress.percent}%;"></div>
+            </div>
+            <div class="download-status-detail" data-status-key="${key}">${progress.status}</div>
+          </div>
+        </div>
+      `;
+    }
+
+    const status = this.modelStatus[key];
+    if (status === 'checking') {
+      return `<div class="model-row"><span class="model-status">Checking…</span></div>`;
+    }
+    if (status === 'ready') {
+      return `
+        <div class="model-row">
+          <span class="model-status is-ready">✓ Downloaded</span>
+          <button type="button" class="btn-model-delete" data-delete-model="${key}">Delete</button>
+        </div>
+      `;
+    }
+    return `
+      <div class="model-row">
+        <span class="model-status">Not downloaded</span>
+        <button type="button" class="btn-primary-pack btn-model-download" data-download-model="${key}">
+          Download ${this.modelSizeMB(key)} MB
+        </button>
+      </div>
+    `;
+  }
+
+  private renderNativeVoiceControls(): string {
+    const voices = this.speech.getFilteredVoices();
+    const selectedVoice = this.speech.getSelectedVoice();
+    const voiceLanguage = this.speech.getVoiceLanguage();
+    const languageOptions = ['en', ...this.speech.getEnglishVoiceLocales(), 'all'];
+    if (!languageOptions.includes(voiceLanguage)) {
+      languageOptions.splice(1, 0, voiceLanguage);
+    }
+
+    return `
+      <div class="form-group">
+        <label for="voice-lang-select">Voice Language</label>
+        <select id="voice-lang-select" class="voice-select">
+          ${languageOptions
+            .map(
+              (lang) =>
+                `<option value="${lang}" ${lang === voiceLanguage ? 'selected' : ''}>${this.formatLanguageLabel(lang)}</option>`
+            )
+            .join('')}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="voice-select">Narrator Voice</label>
+        <select id="voice-select" class="voice-select">
+          ${
+            voices.length > 0
+              ? voices
+                  .map((v) => {
+                    const isSelected = selectedVoice && selectedVoice.name === v.name;
+                    return `<option value="${v.name}" ${isSelected ? 'selected' : ''}>${v.name} (${v.lang})${v.default ? ' [Default]' : ''}</option>`;
+                  })
+                  .join('')
+              : `<option value="">Default System Voice</option>`
+          }
+        </select>
+      </div>
+    `;
+  }
+
+  private renderNeuralVoiceControls(engine: TtsEngineMode, pauseMs: number): string {
+    const voices = getModel(engine)?.voices ?? [];
+    const sid = this.speech.getNeuralVoice(engine);
+
+    return `
+      <div class="form-group">
+        <label for="neural-voice-select">Narrator Voice</label>
+        <select id="neural-voice-select" class="voice-select">
+          ${voices
+            .map((v) => `<option value="${v.sid}" ${v.sid === sid ? 'selected' : ''}>${v.label}</option>`)
+            .join('')}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <div class="slider-header">
+          <label for="pause-slider">Pause Between Sentences</label>
+          <span class="slider-value" id="pause-value">${(pauseMs / 1000).toFixed(2)}s</span>
+        </div>
+        <input
+          type="range"
+          id="pause-slider"
+          class="rate-slider"
+          min="0"
+          max="1000"
+          step="50"
+          value="${pauseMs}"
+        />
+      </div>
+    `;
   }
 
   private updateFormFields(): void {
@@ -259,21 +418,27 @@ export class SettingsModal {
     closeBtn?.addEventListener('click', () => this.close());
 
     // STT Engine radios
-    const engineRadios = this.container.querySelectorAll<HTMLInputElement>('input[name="stt-engine"]');
-    engineRadios.forEach((radio) => {
+    this.container.querySelectorAll<HTMLInputElement>('input[name="stt-engine"]').forEach((radio) => {
       radio.addEventListener('change', async () => {
-        if (radio.checked) {
-          const mode = radio.value as SttEngineMode;
-          await this.controller.setEngine(mode);
-          this.render();
-        }
+        if (!radio.checked) return;
+        await this.runBusy('Switching recognition…', () => this.controller.setEngine(radio.value as SttEngineMode));
       });
     });
 
-    // Download Voice Pack
-    const downloadBtn = this.container.querySelector('#btn-download-pack');
-    downloadBtn?.addEventListener('click', async () => {
-      await this.startDownloadOfflineModel();
+    // Narrator radios
+    this.container.querySelectorAll<HTMLInputElement>('input[name="tts-engine"]').forEach((radio) => {
+      radio.addEventListener('change', async () => {
+        if (!radio.checked) return;
+        await this.runBusy('Loading narrator…', () => this.speech.setTtsEngine(radio.value as TtsEngineMode));
+      });
+    });
+
+    // Model downloads / deletes
+    this.container.querySelectorAll<HTMLButtonElement>('[data-download-model]').forEach((btn) => {
+      btn.addEventListener('click', () => this.startDownload(btn.dataset.downloadModel as ModelKey));
+    });
+    this.container.querySelectorAll<HTMLButtonElement>('[data-delete-model]').forEach((btn) => {
+      btn.addEventListener('click', () => this.deleteDownloadedModel(btn.dataset.deleteModel as ModelKey));
     });
 
     // Hands-Free Toggle
@@ -293,6 +458,23 @@ export class SettingsModal {
       }
     });
 
+    // Sentence pause slider (neural narrators)
+    const pauseSlider = this.container.querySelector('#pause-slider') as HTMLInputElement;
+    const pauseValueEl = this.container.querySelector('#pause-value');
+    pauseSlider?.addEventListener('input', () => {
+      const ms = parseInt(pauseSlider.value, 10);
+      this.speech.setSentencePauseMs(ms);
+      if (pauseValueEl) {
+        pauseValueEl.textContent = `${(ms / 1000).toFixed(2)}s`;
+      }
+    });
+
+    // Neural voice picker
+    const neuralSelect = this.container.querySelector('#neural-voice-select') as HTMLSelectElement;
+    neuralSelect?.addEventListener('change', () => {
+      this.speech.setNeuralVoice(this.speech.getTtsEngine(), parseInt(neuralSelect.value, 10));
+    });
+
     // Language Filter
     const langSelect = this.container.querySelector('#voice-lang-select') as HTMLSelectElement;
     langSelect?.addEventListener('change', () => {
@@ -300,7 +482,7 @@ export class SettingsModal {
       this.render();
     });
 
-    // Voice Selector
+    // Device voice selector
     const voiceSelect = this.container.querySelector('#voice-select') as HTMLSelectElement;
     voiceSelect?.addEventListener('change', () => {
       const voiceName = voiceSelect.value;
@@ -315,8 +497,81 @@ export class SettingsModal {
     const testVoiceBtn = this.container.querySelector('#btn-test-voice');
     testVoiceBtn?.addEventListener('click', async () => {
       await this.speech.unlockAudio();
-      await this.speech.speak('Vantage voice system online. All storybooks indexed.');
+      await this.speech.speak(
+        'Vantage voice system online. Roll six dice to transmit a signal to your homeworld. Say done when ready.'
+      );
     });
+  }
+
+  private async runBusy(message: string, action: () => Promise<void>): Promise<void> {
+    this.errorMessage = '';
+    this.busyMessage = message;
+    this.render();
+    try {
+      await action();
+    } catch (err) {
+      this.errorMessage = err instanceof Error ? err.message : String(err);
+    } finally {
+      this.busyMessage = '';
+      this.render();
+    }
+  }
+
+  private async startDownload(key: ModelKey): Promise<void> {
+    this.errorMessage = '';
+    this.downloads[key] = { percent: 0, status: 'Starting download…' };
+    this.render();
+
+    const report = (percent: number, status: string) => {
+      this.downloads[key] = { percent, status };
+      // Update the DOM directly so the bar animates smoothly without re-rendering
+      const bar = this.container.querySelector<HTMLElement>(`[data-progress-key="${key}"]`);
+      const statusEl = this.container.querySelector(`[data-status-key="${key}"]`);
+      if (bar) bar.style.width = `${percent}%`;
+      if (statusEl) statusEl.textContent = status;
+    };
+
+    try {
+      if (key === 'vosk') {
+        const ok = await this.speech.downloadAndInitOfflineModel((status, percent) => {
+          report(percent ?? this.downloads[key]?.percent ?? 0, status);
+        });
+        if (!ok) throw new Error('The Vosk model failed to download.');
+      } else {
+        const entry = getModel(key);
+        if (!entry) throw new Error(`Unknown model ${key}`);
+        await downloadModel(entry, (loaded, total) => {
+          const percent = Math.min(99, Math.round((loaded / total) * 100));
+          report(percent, `Downloading… ${Math.round(loaded / (1024 * 1024))} of ~${Math.round(total / (1024 * 1024))} MB`);
+        });
+      }
+      this.modelStatus[key] = 'ready';
+    } catch (err) {
+      this.errorMessage = `${this.modelLabel(key)}: ${err instanceof Error ? err.message : String(err)}`;
+    } finally {
+      delete this.downloads[key];
+      await this.refreshModelStatus();
+    }
+  }
+
+  private async deleteDownloadedModel(key: ModelKey): Promise<void> {
+    const confirmed = window.confirm(
+      `Delete ${this.modelLabel(key)} (~${this.modelSizeMB(key)} MB) from this device? You can download it again later.`
+    );
+    if (!confirmed) return;
+
+    await this.runBusy(`Deleting ${this.modelLabel(key)}…`, async () => {
+      if (key === 'vosk') {
+        await this.speech.deleteOfflineModel();
+      } else {
+        const entry = getModel(key);
+        if (!entry) return;
+        await this.speech.releaseSherpaModel(key);
+        await deleteModel(entry);
+      }
+      this.modelStatus[key] = 'missing';
+    });
+    await this.refreshModelStatus();
   }
 
   private formatLanguageLabel(lang: string): string {
@@ -331,39 +586,6 @@ export class SettingsModal {
       return regionName ? `${name} (${regionName})` : name;
     } catch {
       return lang;
-    }
-  }
-
-  private async startDownloadOfflineModel(): Promise<void> {
-    this.isDownloadingModel = true;
-    this.downloadPercent = 5;
-    this.downloadStatus = 'Starting download...';
-    this.render();
-
-    try {
-      await this.speech.downloadAndInitOfflineModel((status, percent) => {
-        this.downloadStatus = status;
-        if (percent !== undefined) {
-          this.downloadPercent = percent;
-        }
-        // Update DOM directly for smooth progress bar updates
-        const bar = this.container.querySelector('.download-progress-bar') as HTMLElement;
-        const statusEl = this.container.querySelector('.download-status-detail');
-        if (bar && percent !== undefined) {
-          bar.style.width = `${percent}%`;
-        }
-        if (statusEl) {
-          statusEl.textContent = status;
-        }
-      });
-
-      this.isDownloadingModel = false;
-      this.downloadStatus = '';
-      this.render();
-    } catch (err) {
-      this.isDownloadingModel = false;
-      this.downloadStatus = `Error: ${String(err)}`;
-      this.render();
     }
   }
 }

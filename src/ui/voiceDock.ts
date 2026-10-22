@@ -1,4 +1,20 @@
 import { VoiceController } from './voiceController';
+import type { SttEngineMode, TtsEngineMode } from '../speech/speechService';
+import { getModel, isModelDownloaded } from '../speech/models/modelStore';
+
+const STT_BADGES: Record<SttEngineMode, string> = {
+  'web-speech': 'WEB SPEECH',
+  'offline-wasm': 'VOSK OFFLINE',
+  sherpa: 'KROKO OFFLINE',
+};
+
+const NARRATOR_LABELS: Record<TtsEngineMode, string> = {
+  native: 'Phone voice',
+  'supertonic-2': 'Supertonic',
+  'kitten-nano': 'Kitten',
+};
+
+const NARRATOR_ORDER: TtsEngineMode[] = ['native', 'supertonic-2', 'kitten-nano'];
 
 export class VoiceDock {
   private container: HTMLElement;
@@ -34,6 +50,12 @@ export class VoiceDock {
           <div class="dock-mode-row">
             <span class="dock-mode-badge" id="dock-mode-badge">IDLE</span>
             <span class="dock-engine-badge" id="dock-engine-badge">WEB SPEECH</span>
+            <button
+              type="button"
+              class="dock-narrator-btn"
+              id="btn-dock-narrator"
+              title="Switch narrator voice (downloaded narrators only)"
+            >Phone voice</button>
           </div>
           <div class="dock-status-message" id="dock-status-message">
             Tap Mic & say e.g. "Transmit on 236"
@@ -125,6 +147,36 @@ export class VoiceDock {
     settingsBtn?.addEventListener('click', () => {
       this.onOpenSettings();
     });
+
+    const narratorBtn = this.container.querySelector<HTMLButtonElement>('#btn-dock-narrator');
+    narratorBtn?.addEventListener('click', () => this.cycleNarrator(narratorBtn));
+  }
+
+  /** Switches to the next downloaded narrator; with none downloaded, opens settings. */
+  private async cycleNarrator(btn: HTMLButtonElement): Promise<void> {
+    const speech = this.controller.getSpeechService();
+    const ready: TtsEngineMode[] = [];
+    for (const mode of NARRATOR_ORDER) {
+      const model = mode === 'native' ? null : getModel(mode);
+      if (!model || (await isModelDownloaded(model))) ready.push(mode);
+    }
+    if (ready.length < 2) {
+      this.onOpenSettings();
+      return;
+    }
+
+    const current = this.controller.getState().ttsEngine;
+    const next = ready[(ready.indexOf(current) + 1) % ready.length];
+    btn.disabled = true;
+    btn.textContent = 'Loading…';
+    try {
+      await speech.setTtsEngine(next);
+    } catch (err) {
+      console.warn('VoiceDock: narrator switch failed:', err);
+    } finally {
+      btn.disabled = false;
+      this.update();
+    }
   }
 
   public update(): void {
@@ -144,7 +196,12 @@ export class VoiceDock {
 
     // Update Engine badge
     if (engineBadge) {
-      engineBadge.textContent = state.sttEngine === 'offline-wasm' ? 'OFFLINE WASM' : 'WEB SPEECH';
+      engineBadge.textContent = STT_BADGES[state.sttEngine];
+    }
+
+    const narratorBtn = this.container.querySelector<HTMLButtonElement>('#btn-dock-narrator');
+    if (narratorBtn && !narratorBtn.disabled) {
+      narratorBtn.textContent = NARRATOR_LABELS[state.ttsEngine];
     }
 
     // Update Status Message

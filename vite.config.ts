@@ -48,6 +48,8 @@ export default defineConfig({
       workbox: {
         maximumFileSizeToCacheInBytes: 60 * 1024 * 1024, // 60 MB to accommodate stories.json and offline voice models
         globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,json,wasm,tar,gz}'],
+        // Offline speech models are opt-in downloads managed by src/speech/models/modelStore.ts
+        globIgnores: ['models/**'],
         runtimeCaching: [
           {
             urlPattern: /\/data\/stories\.json$/,
@@ -76,25 +78,14 @@ export default defineConfig({
                 statuses: [0, 200]
               }
             }
-          },
-          {
-            urlPattern: /\/models\/.*$/,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'vantage-voice-models-cache',
-              expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 365
-              },
-              cacheableResponse: {
-                statuses: [0, 200]
-              }
-            }
           }
         ]
       }
     })
   ],
+  worker: {
+    format: 'es'
+  },
   server: {
     host: Boolean(process.env.npm_config_host) || true
   },

@@ -74,6 +74,11 @@ async function bootstrapApp(): Promise<void> {
     // 5. Initialize controller
     const controller = new VoiceController(db, speechService);
 
+    // Reload the saved narrator / recognition models in the background
+    speechService.restoreSavedEngines().catch((err) => {
+      console.warn('Failed to restore saved speech engines:', err);
+    });
+
     // 6. Audio unlock listener on first user interaction (touch/click/key)
     const unlockHandler = async () => {
       await controller.unlockAudio();
