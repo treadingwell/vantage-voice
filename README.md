@@ -34,6 +34,19 @@ Inspired by [vantage.rulepop.com/#story-lookup](https://vantage.rulepop.com/#sto
     - **Post-Done (Revealed)**: Repeats the revealed outcome text (or branching outcome) and keeps listening hands-free.
   - Explicit voice targeting: Say **"Repeat action"** / **"Repeat prompt"** to hear the dice prompt again, or **"Repeat result"** to hear the revealed outcome.
   - On-screen one-tap **🔁 Repeat Pre-Done Prompt** and **🔁 Repeat Post-Done Result** buttons in the Story View.
+- **🪜 Progressive Sequential Results (e.g. Overpower 235 DIG)**:
+  - For chained sequential entries, reveals only one step at a time, keeping deeper subsequent results spoiler-protected.
+  - Say **"Continue"** or tap the continue button to roll and advance to the next step, or say **"Done"** / **"Stop"** to finish at the current depth.
+  - Automatically extracts intermediate dice roll actions for each continue step, reading voice instructions cleanly without repetition.
+- **🔊 AudioContext Isolation & Speech RMS Loudness Normalization**:
+  - TTS playback runs on an isolated audio context, preventing OS-level microphone capture from ducking playback volume during short option prompts.
+  - Speech RMS loudness normalization (-18 dBFS) and peak limiting maintain uniform volume across all prompts and story readings.
+- **🎲 Variable 'X' Challenge Dice Markers**:
+  - Full support for open dice challenges (`cost: "X"`), read aloud as *"Roll any number of dice; [action]"* with dedicated `#i-cost-x` badges.
+- **🎨 High-Contrast Dark Theme & Polished SVG Sprites**:
+  - Challenge dice badges feature dark slate backgrounds (`#1e293b`), silver borders (`#cbd5e1`), and crisp white digits (`#ffffff`), eliminating low-contrast yellow-on-white text in Take actions.
+  - Key game icons—Dig (silver-white), Repair (cyan), Boost energy cubes (luminous cyan), Reserve (slate/cyan), Secret (gold emblem on lightened base), and dice slots—are brightened for high visibility against the dark space background.
+  - Inline story text game terms (health, morale, time, boost, reserve) are styled with authentic theme colors.
 
 ---
 

@@ -282,3 +282,55 @@ Planned features for future iterations of the Vantage Companion App:
 4. **Fog-of-War Node Graph & Waypoint Notes**:
    - Build a spoiler-free directional graph of discovered locations (`N`/`E`/`S`/`W` connections from Depart actions) with voice-dictated player notes (e.g., *"Note on 236: Transmission tower for homeworld signal"*).
 
+---
+
+## 8. Recent System Enhancements (Oct 21–22, 2026)
+
+### 8.1 Playback AudioContext Isolation & Speech RMS Normalization
+- **AudioContext Separation**:
+  - Isolated TTS audio playback (`playbackCtx`) from microphone speech recognition recording (`micAudioContext`) in `src/speech/speechService.ts`.
+  - Previously, sharing an audio context or concurrent mic listening caused browser/OS audio session ducking, significantly reducing playback volume on short option prompts and action prompts.
+  - Pauses microphone capture while TTS is actively speaking and resumes after a brief hardware settle interval, completely eliminating OS-level audio ducking.
+- **Speech RMS Normalization & Peak Limiting**:
+  - In `src/speech/neuralNarrator.ts`, speech audio buffers are normalized using Root-Mean-Square (RMS) loudness targeting (-18 dBFS) with a soft peak limiter.
+  - Ensures uniform, consistent volume across all readings—from brief dice challenge prompts and branching choice options to long multi-paragraph story entries.
+
+### 8.2 Variable 'X' Challenge Dice Markers
+- **Type & DB Support**:
+  - Updated `StoryEntryVariant.cost` to `number | 'X' | null` in `src/data/types.ts` and `src/data/storyDb.ts`.
+- **Speech Formatting**:
+  - In `src/speech/ttsFormatter.ts`, entries with an `X` dice marker (such as `e20`) are parsed and read aloud as:
+    > *"Roll any number of dice; [action]"*
+  - Replaced inline `<svg>...#cost-x</svg>` tags with `" Roll any number of dice; "`.
+- **UI Rendering**:
+  - Rendered with the `#i-cost-x` badge in `storyView.ts` and `lookupPad.ts`.
+
+### 8.3 Progressive Sequential Multi-Step Entries (`isSequential`)
+- **Sequential Multi-Step Detection**:
+  - Identifies entries (like `o235`) where choices are chained sequential steps rather than mutually exclusive branches using `isSequential` in `src/speech/ttsFormatter.ts`:
+    - Matches phrases like `"(then read the next result only)"` or entries where all choices begin with `"Continue"`.
+  - Automatically extracts intermediate required actions (e.g. `overpower-2-DIG`, `overpower-3-DIG`, `overpower-4-DIG`) from preceding HTML to provide accurate dice roll requirements for each step.
+- **Step-by-Step Progressive Reveal UI**:
+  - In `src/ui/storyView.ts`, displays only the active sequential step. Deeper steps remain completely hidden and spoiler-protected until the user chooses to continue.
+  - Each step provides a clear **"Continue"** button with its intermediate action and cost.
+- **Clean Voice Navigation (No Prompt Repetition)**:
+  - Supported voice commands: Say `"Continue"` / `"Next"` / `"Deeper"` to advance to the next step, or `"Done"` / `"Stop"` to conclude at the current depth.
+  - Cleaned up `formatBranchChoicesPrompt` to avoid repeating the action instruction that is already part of the story text. Now reads cleanly:
+    > *Say "Continue" to read the next result, or say "Done" to stop.*
+
+### 8.4 High-Contrast Dark Theme UI & SVG Sprites
+- **High-Contrast Challenge Dice Badges**:
+  - Redesigned `#i-cost-1` through `#i-cost-10` and `#i-cost-x` in `src/ui/svgSprites.ts` with an opaque dark slate backing (`#cost-hex-solid` fill `#1e293b`), silver border (`#cost-hex` fill `#cbd5e1`), and crisp white digits (`fill="#ffffff"`).
+  - Updated `.cost-svg-wrapper` and inline dice SVGs (`svg.inline-cost-dice-svg`) in `src/styles/main.css` to dark slate with silver borders.
+  - Eliminates unreadable yellow-on-white text in `take` skill actions and dice challenges.
+- **Brightened & Polished Dark Icons**:
+  - Dig (`#i-dig`): Updated from `#231f20` (black) to `#e2e8f0` (silver-white).
+  - Repair (`#i-repair`): Updated from `#231f20` to `#38bdf8` (bright cyan).
+  - Boost (`#i-boost`): Updated from dark gray to `#38bdf8` (energy cyan cube).
+  - Boost Output (`#i-boost-output`): Arrow updated to `#94a3b8`.
+  - Reserve (`#i-reserve`): Outline updated to `#94a3b8` and plus sign to `#38bdf8`.
+  - Secret (`#i-secret`): Lightened base to `#645952` to highlight the gold `#fed77e` emblem on dark blue.
+  - Slots (`#slot`, `#slot-cost`, `#slot-bonus`): Brightened outlines to `#94a3b8`.
+  - Story text game-term icons: Added theme fills (health = red, morale = gold `#fbbf24`, time = cyan, boost = light blue).
+
+
